@@ -740,6 +740,12 @@ internal sealed partial class RenderWindow : Panel
         return sum / Math.Max(1, _selection.Count);
     }
 
+    /// <summary>Camera on one object (the Reference window's «Show in the view»).</summary>
+    public void FrameObject(SceneObject obj) => _camera.Frame(obj.BoundsCenter, Math.Max(obj.BoundsRadius, 32f));
+
+    /// <summary>The door's teleport, if it is a load door.</summary>
+    public Mutagen.Bethesda.Skyrim.ITeleportDestinationGetter? TeleportOfObject(EditorApp app, SceneObject obj) => TeleportOf(app, obj);
+
     private void FrameSelection()
     {
         if (_selection.Count == 0) return;

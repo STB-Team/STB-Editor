@@ -5,7 +5,7 @@
 STB Editor — a standalone replacement for the Skyrim Creation Kit (placement, cells, landscape,
 navmesh, record editing, script properties without compiling). Plan and reasoning:
 `docs/PLAN.md`, teardown of the SkyrimMapEditor concept and of CK: `docs/ANALYSIS.md`.
-Status (v0.73.0, 2026-10-21) — the table in `README.md` is the source of truth. Done: data, NIF,
+Status (v0.74.0, 2026-10-21) — the table in `README.md` is the source of truth. Done: data, NIF,
 D3D11 view incl. particles/billboards/shader animation, NPCs from race/outfit/FaceGen in bind pose;
 ref edits with undo (`Core/EditDocument`), CK-style drags + ImGuizmo (`Panels/RenderWindow.Editing.cs`),
 lossless saving into an active plugin (`Core/PluginWriter` + `Data/Raw/RawSplice`,
@@ -181,6 +181,9 @@ v0.73.0: XPRM bounds are full sizes (`SceneBuilder` halves them into `SceneObjec
 select modes incl. edges `NavmeshSelection.Edges`, `RenderOptions.NavmeshView`, flood fill, quad, edge rotate, A* path test).
 In navmesh mode the object-tool keys Q W R G T F step aside for CK's navmesh keys. CK's tooltips live as plain ASCII in
 CreationKit.exe around 0x2921d10 (main toolbar) / 0x2922540 (navmesh) — the toolbar resources have no strings.
+v0.74.0: Reference window (`Panels/ReferenceWindow.cs`, double-click in the render window; `ReferenceProperties.DrawTabs` = the
+Inspector's sections as CK tabs, Linked From from the Use Info index XLKR / XESP / XAPR); reference flags per base type
+(`ReferenceProperties.FlagsFor`, bits from Mutagen's PlacedObject.*MajorFlag / PlacedNpc.MajorFlag enums).
 Next: what is still missing against CK and xEdit, with priorities and order — `docs/GAPS.md` (update it when a gap closes).
 Developer docs: `docs/DEVELOPING.md`, `docs/RENDERING.md`, history in `CHANGELOG.md` —
 **keep them, README and this file current with every feature** (several people work on this repo,

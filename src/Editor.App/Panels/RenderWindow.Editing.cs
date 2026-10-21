@@ -386,14 +386,12 @@ internal sealed partial class RenderWindow
 
         if (_drag != DragKind.None) UpdateDrag(io, mouse, size);
 
-        if (hovered && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left) && _selection.Count > 0)
+        if (hovered && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left) && _selection.Count > 0
+            && _tool is EditTool.Select or EditTool.Move or EditTool.Rotate or EditTool.Scale)
         {
-            // A teleport door: go through it (to the cell of the door it leads to). Anything else: frame it.
-            if (_selection.Count == 1 && _tool is EditTool.Select or EditTool.Move or EditTool.Rotate or EditTool.Scale
-                && TeleportOf(app, _selection.First()) is not null)
-                AskGoThroughDoor(app, _selection.First());
-            else
-                FrameSelection();
+            // CK: the Reference window of what was double-clicked (doors: its «Go through the door»; C frames the selection).
+            var clicked = PickAt(mouse, size)?.Object is { } under && _selection.Contains(under) ? under : _selection.First();
+            app.ReferenceWindow.Open(clicked);
         }
 
         // ---- keys

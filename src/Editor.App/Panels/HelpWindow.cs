@@ -51,7 +51,7 @@ internal sealed class HelpWindow
         ]),
         ("Doors and cells",
         [
-            ("Double-click a door", "Go through it (asks first): opens the cell of the linked door, camera at its marker"),
+            ("Double-click an object", "Its Reference window (CK): 3D data with step buttons, the check boxes and CK's tabs; a load door has «Go through the door»"),
             ("Inspector: Go to linked door", "The same from the door's properties"),
             ("Cell View: double-click a cell", "Load it; the list on the right shows its objects (click one to go to it)"),
             ("World menu", "New interior cell, new worldspace"),

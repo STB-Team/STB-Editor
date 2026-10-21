@@ -54,6 +54,7 @@ internal sealed class EditorApp : IDisposable
 
     /// <summary>Framework config files opened from Use Info / Framework configs.</summary>
     public Panels.ConfigFileWindow ConfigFile { get; } = new();
+    public Panels.ReferenceWindow ReferenceWindow { get; } = new();
 
     /// <summary>Papyrus source windows (Scripts tab: Source / New script).</summary>
     public Panels.ScriptSourceWindows ScriptSources { get; } = new();
@@ -388,6 +389,13 @@ internal sealed class EditorApp : IDisposable
         _settingsWindow.Draw(this);
         ClaudeWindow.Draw(this);
         ConfigFile.Draw(this);
+        // --reference-window (with --select): open it for the selection, for screenshots.
+        if (!_referenceWindowShown && RenderWindow.SingleSelection is { } chosen && Environment.GetCommandLineArgs().Contains("--reference-window"))
+        {
+            ReferenceWindow.Open(chosen);
+            _referenceWindowShown = true;
+        }
+        ReferenceWindow.Draw(this);
         Bridge.Apply(_settings);
         Bridge.Pump(this);
         _mastersWindow.Draw(this);
@@ -3426,6 +3434,7 @@ internal sealed class EditorApp : IDisposable
     private bool _gizmoDone;
     private bool _marqueeDone;
     private bool _navToolsDone;
+    private bool _referenceWindowShown;
     private string? _openForm;
     private bool _doorDone;
     private bool _zoomDone;

@@ -21,15 +21,69 @@ namespace StbEditor.App.Panels;
 /// </summary>
 internal static class ReferenceProperties
 {
-    private static readonly (string Label, uint Bit, string Tip)[] Flags =
-    [
-        (T("Persistent"), 0x400, T("Always loaded (needed for scripts, quests, linked refs across cells)")),
-        (T("Initially disabled"), 0x800, T("Hidden until something enables it")),
-        (T("Visible when distant"), 0x8000, T("Shown in distant LOD")),
-        (T("No AI acquire"), 0x2000000, T("NPCs will not pick it up")),
-        (T("Don't havok settle"), 0x20000000, T("Stays where placed instead of dropping when the cell loads")),
-        (T("No respawn"), 0x40000000, T("Containers/items do not respawn")),
-    ];
+    /// <summary>
+    /// CK's reference check boxes. The same bit means different things on different base types (Mutagen's per-type MajorFlag
+    /// enums: 0x200 is Hidden From Local Map on a static, Motion Blur on a moveable static, Casts Shadows on a light, Starts Dead
+    /// on an actor), so the list depends on what is placed. English labels, translated when drawn.
+    /// </summary>
+    private static (string Label, uint Bit, string Tip)[] FlagsFor(string? signature)
+    {
+        var list = new List<(string, uint, string)>
+        {
+            ("Persistent", 0x400, "Always loaded (needed for scripts, quests, linked refs across cells)"),
+            ("Initially disabled", 0x800, "Hidden until something enables it"),
+        };
+        const uint lod = 0x10000, water = 0x10000000, settle = 0x20000000, respawn = 0x40000000, acquire = 0x2000000, distant = 0x8000;
+        void Add(string label, uint bit, string tip) => list.Add((label, bit, tip));
+        switch (signature)
+        {
+            case "ACHR":
+                Add("Starts dead", 0x200, "The actor is dead when the cell first loads");
+                Add("No AI acquire", acquire, "NPCs will not pick it up");
+                Add("Don't havok settle", settle, "Stays where placed instead of dropping when the cell loads");
+                return [.. list];
+            case "DOOR":
+                Add("Hidden from local map", 0x40, "Not drawn on the local map");
+                Add("Inaccessible", 0x100, "The door does not open (shows as inaccessible)");
+                break;
+            case "LIGH":
+                Add("Doesn't light water", 0x100, "Water is not lit by it");
+                Add("Casts shadows", 0x200, "A shadow-casting light (only a few per view)");
+                Add("Never fades", lod, "Does not fade out with distance");
+                Add("Doesn't light landscape", 0x20000, "The land is not lit by it");
+                Add("No AI acquire", acquire, "NPCs will not pick it up");
+                break;
+            case "MSTT":
+                Add("Motion blur", 0x200, "Moving parts are drawn with motion blur");
+                Add("Is full LOD", lod, "Shown at full detail at any distance (big set pieces)");
+                break;
+            case "CONT":
+                Add("Visible when distant", distant, "Shown in distant LOD");
+                Add("Is full LOD", lod, "Shown at full detail at any distance (big set pieces)");
+                Add("No AI acquire", acquire, "NPCs will not pick it up");
+                Add("Reflected by auto water", water, "Reflected by water that picks its reflections itself");
+                Add("Don't havok settle", settle, "Stays where placed instead of dropping when the cell loads");
+                Add("Ground", respawn, "The container stands on the ground");
+                return [.. list];
+            case "ADDN":
+                Add("Is full LOD", lod, "Shown at full detail at any distance (big set pieces)");
+                break;
+            case "MISC" or "AMMO" or "INGR" or "ALCH" or "BOOK" or "SCRL" or "SLGM" or "KEYM" or "WEAP" or "ARMO":
+                Add("Visible when distant", distant, "Shown in distant LOD");
+                Add("Is full LOD", lod, "Shown at full detail at any distance (big set pieces)");
+                Add("No AI acquire", acquire, "NPCs will not pick it up");
+                break;
+            default: // statics, trees, flora, furniture, activators
+                Add("Hidden from local map", 0x200, "Not drawn on the local map");
+                Add("Visible when distant", distant, "Shown in distant LOD");
+                Add("Is full LOD", lod, "Shown at full detail at any distance (big set pieces)");
+                break;
+        }
+        Add("Reflected by auto water", water, "Reflected by water that picks its reflections itself");
+        Add("Don't havok settle", settle, "Stays where placed instead of dropping when the cell loads");
+        Add("No respawn", respawn, "Containers/items do not respawn");
+        return [.. list];
+    }
 
     /// <summary>A door waiting for its destination to be picked (may be in another cell).</summary>
     private static (SceneObject Door, RefContext Context)? _linking;
@@ -75,7 +129,7 @@ internal static class ReferenceProperties
         void Edit(string name, Action<IPlaced> change) => Apply(app, batch ? [obj, .. others] : [obj], name, change);
 
         DrawBase(app, obj, current, Edit);
-        DrawFlags(current, Edit);
+        DrawFlags(current, obj, Edit);
         DrawEnableParent(app, current, Edit);
         DrawOwnership(app, current, Edit);
         if (current is IPlacedObjectGetter placed)
@@ -102,6 +156,58 @@ internal static class ReferenceProperties
             document.Record(new RevertCommand(before));
         }
         ImGui.Spacing();
+    }
+
+    /// <summary>
+    /// The Reference window's tabs (CK's order): the reference check boxes and base, enable parent, ownership, lock and teleport
+    /// where they apply, extra, linked refs, scripts and every other field. One object; the caller has begun the tab bar.
+    /// </summary>
+    public static void DrawTabs(EditorApp app, SceneObject obj)
+    {
+        if (app.Session is not { } session) return;
+        var document = app.Document;
+        var context = app.RenderWindow.RefContextOf(obj);
+        document.RegisterContext(obj.Reference, context);
+        var current = document.Override(obj.Reference)?.Record as IPlacedGetter ?? obj.Record as IPlacedGetter ?? NewRecord(session, obj);
+        if (current is null) return;
+        void Edit(string name, Action<IPlaced> change) => Apply(app, [obj], name, change);
+
+        Tab(T("Flags") + "###refflags", () =>
+        {
+            DrawBase(app, obj, current, Edit);
+            ImGui.Spacing();
+            DrawFlags(current, obj, Edit);
+            if (document.Override(obj.Reference) is { } before && ImGui.SmallButton(T("Revert reference properties")))
+                document.Record(new RevertCommand(before));
+        });
+        Tab(T("Enable parent") + "###refenable", () => DrawEnableParent(app, current, Edit));
+        Tab(T("Ownership") + "###refowner", () => DrawOwnership(app, current, Edit));
+        if (current is IPlacedObjectGetter placed)
+        {
+            if (obj.BaseSignature is "DOOR" or "CONT" or "ACTI" or "FURN") Tab(T("Lock") + "###reflock", () => DrawLock(app, placed, Edit));
+            if (obj.BaseSignature == "DOOR") Tab(T("Teleport") + "###refteleport", () => DrawTeleport(app, obj, context, placed, Edit));
+            Tab(T("Extra") + "###refextra", () =>
+            {
+                DrawExtra(placed, obj, Edit);
+                ImGui.TextColored(Theme.TextDim, T("Count (items), radius (lights); charge, health, level and the rest are under Other."));
+            });
+        }
+        Tab(T("Linked ref") + "###reflinked", () => DrawLinkedRefs(app, current, Edit));
+        if (ScriptsEditor.Supports(current))
+            Tab(TF($"Scripts ({ScriptsEditor.Count(current)})###refscripts"), () => ScriptsEditor.Draw(app, current, (name, change) => Edit(name, r => change(r))));
+        Tab(T("Other") + "###refother", () =>
+        {
+            ImGui.TextColored(Theme.TextDim, T("Activate parents, emittance, multibound, location ref types, attach ref, reflections, primitive, rooms and the rest."));
+            FormView.DrawTab(app, current, MoreTab(current), MoreTarget(app, [obj]));
+        });
+
+        static void Tab(string label, Action draw)
+        {
+            if (!ImGui.BeginTabItem(label)) return;
+            if (ImGui.BeginChild("##tab", Vector2.Zero)) draw();
+            ImGui.EndChild();
+            ImGui.EndTabItem();
+        }
     }
 
     /// <summary>
@@ -250,19 +356,37 @@ internal static class ReferenceProperties
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Replace what is placed here, keeping position and properties (CK: Search & Replace)"));
     }
 
-    private static void DrawFlags(IPlacedGetter current, Action<string, Action<IPlaced>> edit)
+    private static void DrawFlags(IPlacedGetter current, SceneObject obj, Action<string, Action<IPlaced>> edit)
     {
         var raw = (uint)current.MajorRecordFlagsRaw;
-        for (var i = 0; i < Flags.Length; i++)
+        var flags = FlagsFor(current is IPlacedNpcGetter ? "ACHR" : obj.BaseSignature);
+        // Two columns, as the CK lays them out.
+        var column = ImGui.GetContentRegionAvail().X * 0.5f;
+        var start = ImGui.GetCursorPosX();
+        var n = 0;
+        void Box(string label, bool on, Action<bool> set, string tip)
         {
-            var (label, bit, tip) = Flags[i];
-            var on = (raw & bit) != 0;
-            if (i % 2 == 1) ImGui.SameLine(ImGui.GetContentRegionAvail().X * 0.5f + ImGui.GetCursorPosX() * 0);
-            if (ImGui.Checkbox(T(label), ref on))
-                // Each record keeps its own other flags (a batch change touches only this bit).
-                edit(on ? TF($"Set {T(label)}") : TF($"Clear {T(label)}"), r => r.MajorRecordFlagsRaw = (int)(on ? (uint)r.MajorRecordFlagsRaw | bit : (uint)r.MajorRecordFlagsRaw & ~bit));
+            if (n++ % 2 == 1) ImGui.SameLine(start + column);
+            if (ImGui.Checkbox(T(label), ref on)) set(on);
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(T(tip));
         }
+        foreach (var (label, bit, tip) in flags)
+            // Each record keeps its own other flags (a batch change touches only this bit).
+            Box(label, (raw & bit) != 0, on => edit(on ? TF($"Set {T(label)}") : TF($"Clear {T(label)}"),
+                r => r.MajorRecordFlagsRaw = (int)(on ? (uint)r.MajorRecordFlagsRaw | bit : (uint)r.MajorRecordFlagsRaw & ~bit)), tip);
+        // Not record flags, but the CK shows them with them.
+        var sandbox = current switch { IPlacedObjectGetter o => o.IsIgnoredBySandbox, IPlacedNpcGetter a => a.IsIgnoredBySandbox, _ => false };
+        Box("Ignored by sandbox", sandbox, on => edit(T("Ignored by sandbox"), r =>
+        {
+            switch (r)
+            {
+                case PlacedObject o: o.IsIgnoredBySandbox = on; break;
+                case PlacedNpc a: a.IsIgnoredBySandbox = on; break;
+                default: throw new InvalidCastException();
+            }
+        }), "Sandboxing NPCs do not use it");
+        if (current is IPlacedObjectGetter door && obj.BaseSignature == "DOOR")
+            Box("Open by default", door.IsOpenByDefault, on => edit(T("Open by default"), r => ((PlacedObject)r).IsOpenByDefault = on), "The door starts open");
     }
 
     private static void DrawEnableParent(EditorApp app, IPlacedGetter current, Action<string, Action<IPlaced>> edit)
@@ -404,7 +528,7 @@ internal static class ReferenceProperties
         {
             if (ImGui.Button(app.RenderWindow.IsFindingDoor ? T("Finding the door…") : T("Go to linked door")) && !teleport.Door.IsNull)
                 app.RenderWindow.GoToLinkedDoor(app, obj);
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Opens the cell of the destination door, camera at its marker (or double-click the door)"));
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Opens the cell of the destination door, camera at its marker (also in the Reference window: double-click the door)"));
             ImGui.Text(T("Destination door"));
             FormKey? door = teleport.Door.FormKeyNullable;
             if (FormField.Draw(app, "teleportdoor", ref door, null, references: true) && door is { } d)
