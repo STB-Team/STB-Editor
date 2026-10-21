@@ -317,7 +317,7 @@ public sealed class LandscapeData
     /// reuses) an alpha layer, and layers above it fade so it shows. Returns false when a quadrant
     /// has no room for another layer.
     /// </summary>
-    public bool Paint(int x, int y, FormKey texture, float amount)
+    public bool Paint(int x, int y, FormKey texture, float amount, float maxOpacity = 1f)
     {
         var ok = true;
         foreach (var (q, index) in QuadrantVertices(x, y))
@@ -347,12 +347,65 @@ public sealed class LandscapeData
                 }
 
                 var layer = quadrant.Layers[position];
-                layer.Opacity[index] = Math.Min(1f, layer.Opacity[index] + amount);
+                // CK's Max Opacity: painting never takes a layer past it (it may already be higher).
+                if (layer.Opacity[index] < maxOpacity) layer.Opacity[index] = Math.Min(maxOpacity, layer.Opacity[index] + amount);
             }
 
             for (var i = position + 1; i < quadrant.Layers.Count; i++)
                 quadrant.Layers[i].Opacity[index] = Math.Max(0f, quadrant.Layers[i].Opacity[index] - amount);
         }
         return ok;
+    }
+
+    /// <summary>Takes a texture away at a vertex: its layers lose <paramref name="amount"/> of opacity (a base texture stays).</summary>
+    public bool Erase(int x, int y, FormKey texture, float amount)
+    {
+        var changed = false;
+        foreach (var (q, index) in QuadrantVertices(x, y))
+            foreach (var layer in Quadrants[q].Layers.Where(l => l.Texture == texture && l.Opacity[index] > 0))
+            {
+                layer.Opacity[index] = Math.Max(0f, layer.Opacity[index] - amount);
+                changed = true;
+            }
+        return changed;
+    }
+
+    /// <summary>
+    /// How much each texture shows at a vertex (of the first quadrant it belongs to): the base under every layer, each layer
+    /// over what is below it. Null key = no base texture (the game's default land).
+    /// </summary>
+    public Dictionary<FormKey, float> Weights(int x, int y)
+    {
+        var (q, index) = QuadrantVertices(x, y).First();
+        var quadrant = Quadrants[q];
+        var weights = new Dictionary<FormKey, float> { [quadrant.BaseTexture ?? FormKey.Null] = 1f };
+        foreach (var layer in quadrant.Layers)
+        {
+            var o = layer.Opacity[index];
+            foreach (var k in weights.Keys.ToList()) weights[k] *= 1 - o;
+            weights[layer.Texture] = weights.GetValueOrDefault(layer.Texture) + o;
+        }
+        return weights;
+    }
+
+    /// <summary>
+    /// The quadrants holding a vertex use <paramref name="to"/> instead of <paramref name="from"/> for their base or layer — the
+    /// whole quadrant changes. For textures with the same picture (grass on / off) when the quadrant has no free layer.
+    /// </summary>
+    public bool Retexture(int x, int y, FormKey from, FormKey to)
+    {
+        var changed = false;
+        foreach (var (q, _) in QuadrantVertices(x, y))
+        {
+            var quadrant = Quadrants[q];
+            if (quadrant.BaseTexture == from) { quadrant.BaseTexture = to; changed = true; }
+            for (var i = 0; i < quadrant.Layers.Count; i++)
+                if (quadrant.Layers[i].Texture == from)
+                {
+                    quadrant.Layers[i] = new LandLayer(to, quadrant.Layers[i].Opacity);
+                    changed = true;
+                }
+        }
+        return changed;
     }
 }

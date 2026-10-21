@@ -356,6 +356,7 @@ internal sealed class EditorApp : IDisposable
         if (!_gizmoDone && Session is not null && Environment.GetCommandLineArgs().Contains("--autotest-gizmo")) _gizmoDone = RenderWindow.GizmoTestStep();
         if (!_marqueeDone && Session is not null && Environment.GetCommandLineArgs().Contains("--autotest-marquee")) _marqueeDone = RenderWindow.MarqueeTestStep();
         if (!_navToolsDone && Session is not null && Environment.GetCommandLineArgs().Contains("--autotest-navtools")) _navToolsDone = RenderWindow.NavToolsTest(this);
+        if (!_brushesDone && Session is not null && Environment.GetCommandLineArgs().Contains("--autotest-brushes")) _brushesDone = RenderWindow.BrushTest(this);
 
         DrawMainMenu();
         StatusBar.Draw(this);
@@ -620,6 +621,7 @@ internal sealed class EditorApp : IDisposable
         && (!Environment.GetCommandLineArgs().Contains("--autotest-gizmo") || _gizmoDone)
         && (!Environment.GetCommandLineArgs().Contains("--autotest-marquee") || _marqueeDone)
         && (!Environment.GetCommandLineArgs().Contains("--autotest-navtools") || _navToolsDone)
+        && (!Environment.GetCommandLineArgs().Contains("--autotest-brushes") || _brushesDone)
         && (!Environment.GetCommandLineArgs().Contains("--autotest-door") || _doorDone)
         && (!Environment.GetCommandLineArgs().Contains("--autotest-zoom") || _zoomDone)
         && (!Environment.GetCommandLineArgs().Contains("--autotest-form") || _formStage == 2)
@@ -3434,6 +3436,7 @@ internal sealed class EditorApp : IDisposable
     private bool _gizmoDone;
     private bool _marqueeDone;
     private bool _navToolsDone;
+    private bool _brushesDone;
     private bool _referenceWindowShown;
     private string? _openForm;
     private bool _doorDone;

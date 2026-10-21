@@ -2039,6 +2039,33 @@ internal static class LangRu
         ["Its Reference window (CK): 3D data with step buttons, the check boxes and CK's tabs; a load door has «Go through the door»"] = "Окно ссылки (как в CK): 3D-данные со стрелками шага, флажки и вкладки CK; у двери-телепорта — «Пройти через дверь»",
         ["Opens the cell of the destination door, camera at its marker (also in the Reference window: double-click the door)"] = "Открывает ячейку двери назначения, камера у её маркера (то же в окне ссылки: двойной клик по двери)",
 
+        // ---- Landscape
+        ["Set height"] = "Задать высоту",
+        ["Raise to"] = "Поднять до",
+        ["Lower to"] = "Опустить до",
+        ["Noise"] = "Шум",
+        ["Erase"] = "Стереть",
+        ["Grass off"] = "Убрать траву",
+        ["Grass on"] = "Вернуть траву",
+        ["Falloff"] = "Спад",
+        ["CK: Edit Falloff % — the outer part of the radius that fades out (the inner circle on the land is the full-strength part)"] = "CK: Edit Falloff % — внешняя часть радиуса, где кисть ослабевает (внутренний круг на земле — полная сила)",
+        ["Target height"] = "Целевая высота",
+        ["Max opacity"] = "Макс. непрозрачность",
+        ["CK: Max Opacity — painting does not take a texture past this"] = "CK: Max Opacity — покраска не делает текстуру плотнее этого",
+        ["Pulls the land to the target height (CK: Absolute Height)."] = "Тянет землю к целевой высоте (CK: Absolute Height).",
+        ["Raises the land that is lower than the target, never past it (CK: Raise To)."] = "Поднимает землю ниже цели, не выше неё (CK: Raise To).",
+        ["Lowers the land that is higher than the target, never past it (CK: Lower To)."] = "Опускает землю выше цели, не ниже неё (CK: Lower To).",
+        ["Adds rough bumps; strokes over the same spot build the same bumps."] = "Добавляет неровности; мазки по одному месту наращивают те же бугры.",
+        ["Takes the texture below away from the land under the brush."] = "Убирает выбранную ниже текстуру с земли под кистью.",
+        ["No grass under the brush: the texture that shows gives way to its twin without grass (the same picture, e.g. LTundra01 → LTundra01NoGrass)."] = "Без травы под кистью: видимая текстура заменяется своим двойником без травы (та же картинка, например LTundra01 → LTundra01NoGrass).",
+        ["Grass back: the texture that shows gives way to its twin with grass."] = "Трава обратно: видимая текстура заменяется своим двойником с травой.",
+        ["Only used here"] = "Только используемые здесь",
+        ["Only the textures the loaded land uses (CK's Used column)"] = "Только текстуры загруженной земли (столбец Used в CK)",
+        [" · used in {0} quadrant(s)"] = " · в {0} квадр.",
+
+        // ---- Landscape
+        ["landscape: a quadrant had no free texture layer — its texture switched to the twin across the whole quadrant (same picture, the grass changes there)"] = "ландшафт: в квадранте нет свободного слоя — его текстура переключена на двойника во всём квадранте (картинка та же, трава меняется там)",
+
         // ---- main menu
         ["File"] = "Файл",
         ["Data..."] = "Данные...",

@@ -1,3 +1,4 @@
+using Mutagen.Bethesda.Plugins;
 using System.Numerics;
 using Hexa.NET.ImGui;
 using Mutagen.Bethesda.Skyrim;
@@ -15,6 +16,24 @@ internal sealed class LandscapePanel : Panel
 {
     private List<(CatalogRecord Record, string Texture)> _textures = [];
     private string _filter = string.Empty;
+    private bool _onlyUsed;
+    private (object? Scene, int Terrain, int Version) _usedFor;
+    private Dictionary<FormKey, int> _used = [];
+
+    /// <summary>Quadrants of the loaded land that use each texture (base or layer), recounted when the land changes.</summary>
+    private Dictionary<FormKey, int> UsedHere(EditorApp app)
+    {
+        var scene = app.RenderWindow.Scene;
+        var key = ((object?)scene, scene?.Terrain.Count ?? 0, app.Document.History.Version);
+        if (key == _usedFor) return _used;
+        _usedFor = key;
+        _used = [];
+        foreach (var terrain in scene?.Terrain ?? [])
+            foreach (var quadrant in terrain.Data?.Quadrants ?? [])
+                foreach (var texture in quadrant.Layers.Where(l => l.Opacity.Any(o => o > 0.01f)).Select(l => l.Texture).Append(quadrant.BaseTexture ?? FormKey.Null).Distinct())
+                    if (!texture.IsNull) _used[texture] = _used.GetValueOrDefault(texture) + 1;
+        return _used;
+    }
     private float _flatHeight;
     private SceneBuilder? _builder;
     private string _heightmapPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "STB Editor", "Heightmaps", "heightmap.r16");
@@ -52,38 +71,73 @@ internal sealed class LandscapePanel : Panel
 
         ImGui.Separator();
         var mode = (int)brush.Mode;
-        ImGui.RadioButton(T("Raise"), ref mode, (int)LandBrushMode.Raise);
-        ImGui.SameLine();
-        ImGui.RadioButton(T("Lower"), ref mode, (int)LandBrushMode.Lower);
-        ImGui.SameLine();
-        ImGui.RadioButton(T("Flatten"), ref mode, (int)LandBrushMode.Flatten);
-        ImGui.SameLine();
-        ImGui.RadioButton(T("Smooth"), ref mode, (int)LandBrushMode.Smooth);
-        ImGui.SameLine();
-        ImGui.RadioButton(T("Paint"), ref mode, (int)LandBrushMode.Paint);
-        ImGui.SameLine();
-        ImGui.RadioButton(T("Colour"), ref mode, (int)LandBrushMode.Color);
+        ImGui.TextColored(Theme.TextDim, T("Height"));
+        Radio(T("Raise"), LandBrushMode.Raise, true);
+        Radio(T("Lower"), LandBrushMode.Lower);
+        Radio(T("Flatten"), LandBrushMode.Flatten);
+        Radio(T("Smooth"), LandBrushMode.Smooth);
+        Radio(T("Set height"), LandBrushMode.SetHeight, true);
+        Radio(T("Raise to"), LandBrushMode.RaiseTo);
+        Radio(T("Lower to"), LandBrushMode.LowerTo);
+        Radio(T("Noise"), LandBrushMode.Noise);
+        ImGui.TextColored(Theme.TextDim, T("Texture"));
+        Radio(T("Paint"), LandBrushMode.Paint, true);
+        Radio(T("Erase"), LandBrushMode.Erase);
+        Radio(T("Colour"), LandBrushMode.Color);
+        Radio(T("Grass off"), LandBrushMode.GrassOff, true);
+        Radio(T("Grass on"), LandBrushMode.GrassOn);
         brush.Mode = (LandBrushMode)mode;
+
+        void Radio(string label, LandBrushMode value, bool first = false)
+        {
+            if (!first) ImGui.SameLine();
+            ImGui.RadioButton(label, ref mode, (int)value);
+        }
 
         var radius = brush.Radius;
         ImGui.SetNextItemWidth(-ImGui.GetFontSize() * 5);
         if (ImGui.SliderFloat(T("Radius"), ref radius, 32f, 4096f, T("%.0f units"), ImGuiSliderFlags.Logarithmic)) brush.Radius = radius;
+        var falloff = brush.Falloff;
+        ImGui.SetNextItemWidth(-ImGui.GetFontSize() * 5);
+        if (ImGui.SliderFloat(T("Falloff"), ref falloff, 0f, 100f, "%.0f %%")) brush.Falloff = falloff;
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("CK: Edit Falloff % — the outer part of the radius that fades out (the inner circle on the land is the full-strength part)"));
         var strength = brush.Strength;
-        var heights = brush.Mode is LandBrushMode.Raise or LandBrushMode.Lower;
+        var heights = brush.Mode is LandBrushMode.Raise or LandBrushMode.Lower or LandBrushMode.RaiseTo or LandBrushMode.LowerTo or LandBrushMode.Noise;
         ImGui.SetNextItemWidth(-ImGui.GetFontSize() * 5);
         if (ImGui.SliderFloat(T("Strength"), ref strength, heights ? 10f : 1f, heights ? 2000f : 100f, heights ? T("%.0f units/s") : "%.0f %%", ImGuiSliderFlags.Logarithmic))
             brush.Strength = strength;
+        if (brush.Mode is LandBrushMode.SetHeight or LandBrushMode.RaiseTo or LandBrushMode.LowerTo)
+        {
+            ImGui.SetNextItemWidth(ImGui.GetFontSize() * 8);
+            if (Fields.Float(T("Target height"), brush.TargetHeight, out var target, "%.0f")) brush.TargetHeight = target;
+            ImGui.SameLine();
+            ImGui.TextColored(Theme.TextDim, T("Ctrl+click on the land samples it"));
+        }
+        if (brush.Mode is LandBrushMode.Paint or LandBrushMode.GrassOff or LandBrushMode.GrassOn)
+        {
+            var max = brush.MaxOpacity * 100f;
+            ImGui.SetNextItemWidth(-ImGui.GetFontSize() * 5);
+            if (ImGui.SliderFloat(T("Max opacity"), ref max, 1f, 100f, "%.0f %%")) brush.MaxOpacity = max / 100f;
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("CK: Max Opacity — painting does not take a texture past this"));
+        }
 
         ImGui.TextColored(Theme.TextDim, brush.Mode switch
         {
             LandBrushMode.Raise or LandBrushMode.Lower => T("LMB drag; Shift swaps raise / lower."),
             LandBrushMode.Flatten => T("Levels to the height where the stroke started."),
             LandBrushMode.Smooth => T("Evens out bumps under the brush."),
+            LandBrushMode.SetHeight => T("Pulls the land to the target height (CK: Absolute Height)."),
+            LandBrushMode.RaiseTo => T("Raises the land that is lower than the target, never past it (CK: Raise To)."),
+            LandBrushMode.LowerTo => T("Lowers the land that is higher than the target, never past it (CK: Lower To)."),
+            LandBrushMode.Noise => T("Adds rough bumps; strokes over the same spot build the same bumps."),
+            LandBrushMode.Erase => T("Takes the texture below away from the land under the brush."),
+            LandBrushMode.GrassOff => T("No grass under the brush: the texture that shows gives way to its twin without grass (the same picture, e.g. LTundra01 → LTundra01NoGrass)."),
+            LandBrushMode.GrassOn => T("Grass back: the texture that shows gives way to its twin with grass."),
             LandBrushMode.Color => T("Tints the land's vertex colours towards the colour below (white = no tint)."),
             _ => T("Paints the texture below; painting a quadrant's base texture erases the others."),
         });
 
-        if (brush.Mode == LandBrushMode.Paint) DrawTextures(app, brush);
+        if (brush.Mode is LandBrushMode.Paint or LandBrushMode.Erase) DrawTextures(app, brush);
         if (brush.Mode == LandBrushMode.Color)
         {
             var c = brush.Color;
@@ -125,7 +179,12 @@ internal sealed class LandscapePanel : Panel
         var icon = ImGui.GetFontSize() * 2.4f;
         if (!ImGui.BeginChild("##ltex", new Vector2(0, 0), ImGuiChildFlags.Borders)) { ImGui.EndChild(); return; }
 
-        var rows = _textures.Where(t => _filter.Length == 0 || (t.Record.EditorId?.Contains(_filter, StringComparison.OrdinalIgnoreCase) ?? false)).ToList();
+        var used = UsedHere(app);
+        ImGui.Checkbox(T("Only used here"), ref _onlyUsed);
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Only the textures the loaded land uses (CK's Used column)"));
+        var rows = _textures.Where(t => (_filter.Length == 0 || (t.Record.EditorId?.Contains(_filter, StringComparison.OrdinalIgnoreCase) ?? false))
+                && (!_onlyUsed || used.ContainsKey(t.Record.FormKey)))
+            .OrderByDescending(t => _onlyUsed ? used.GetValueOrDefault(t.Record.FormKey) : 0).ToList();
         var clipper = new ImGuiListClipper();
         clipper.Begin(rows.Count, icon + ImGui.GetStyle().ItemSpacing.Y);
         while (clipper.Step())
@@ -145,7 +204,8 @@ internal sealed class LandscapePanel : Panel
                 ImGui.SameLine();
                 ImGui.BeginGroup();
                 ImGui.Text(record.EditorId ?? "?");
-                ImGui.TextColored(Theme.TextDim, $"{app.Session!.Workspace.FormIdText(record.FormKey)} · {Path.GetFileName(texture)}");
+                var count = used.GetValueOrDefault(record.FormKey);
+                ImGui.TextColored(Theme.TextDim, $"{app.Session!.Workspace.FormIdText(record.FormKey)} · {Path.GetFileName(texture)}" + (count > 0 ? TF($" · used in {count} quadrant(s)") : ""));
                 ImGui.EndGroup();
                 ImGui.PopID();
             }
