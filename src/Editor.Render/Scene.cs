@@ -155,7 +155,10 @@ public sealed class NavmeshSelection
     public required FormKey Mesh { get; init; }
     public HashSet<int> Vertices { get; } = [];
     public HashSet<int> Triangles { get; } = [];
-    public bool IsEmpty => Vertices.Count == 0 && Triangles.Count == 0;
+
+    /// <summary>Edges as vertex pairs, smaller index first (CK: Select edges).</summary>
+    public HashSet<(int A, int B)> Edges { get; } = [];
+    public bool IsEmpty => Vertices.Count == 0 && Triangles.Count == 0 && Edges.Count == 0;
 }
 
 /// <summary>A navmesh of a loaded cell: the winning NAVM, or the session's edited copy.</summary>

@@ -140,7 +140,7 @@ internal sealed partial class RenderWindow
         ToolButton(T("Move"), EditTool.Move, T("W — move gizmo (LMB drag on the object works with any tool)"));
         ToolButton(T("Rotate"), EditTool.Rotate, T("E — rotate gizmo"));
         ToolButton(T("Scale"), EditTool.Scale, T("R — uniform scale gizmo"));
-        ToolButton(T("Edit navmesh"), EditTool.Navmesh, T("N — navmesh editing: click vertex/triangle (Ctrl adds), drag moves (Z height), Shift+click adds a vertex (with 2 selected: a triangle), Del deletes, F drops to ground; more in the Navmesh panel"));
+        ToolButton(T("Edit navmesh"), EditTool.Navmesh, T("N — navmesh editing: click vertex/triangle (Ctrl adds), drag moves (Z height), Shift+click adds a vertex (with 2 selected: a triangle), Shift+drag selects in a rectangle; CK's navmesh keys and toolbar row (T V G W A F I O P Q R D)"));
         ToolButton(T("Edit land"), EditTool.Land, T("H — landscape editing: brush settings and textures in the Landscape panel; LMB drag sculpts/paints, Shift inverts raise/lower"));
 
         Toggle(_localSpace ? T("Local") : T("World"), () => _localSpace, v => _localSpace = v, T("L — gizmo axes: world or the object's own"));
@@ -326,7 +326,8 @@ internal sealed partial class RenderWindow
         {
             _pressed = true;
             _dragMouseStart = io.MousePos;
-            var hit = PickAt(mouse, size);
+            // Shift+drag: a selection rectangle wherever it starts (interiors have a wall or floor under every pixel).
+            var hit = io.KeyShift ? null : PickAt(mouse, size);
             _pressObject = hit?.Object;
             _pressWasSelected = hit is { } h0 && _selection.Contains(h0.Object);
             _dragAnchor = hit?.Point ?? Vector3.Zero;
@@ -352,11 +353,18 @@ internal sealed partial class RenderWindow
             _dragByLeft = true;
         }
 
+        // Pressed on empty space: dragging draws a selection rectangle.
+        if (_pressed && _pressObject is null && ImGui.IsMouseDown(ImGuiMouseButton.Left) && _drag == DragKind.None) MarqueeGrowing(_dragMouseStart);
+
         if (_pressed && ImGui.IsMouseReleased(ImGuiMouseButton.Left))
         {
             if (_drag != DragKind.None && _dragByLeft)
             {
                 EndDrag(_drag switch { DragKind.Rotate => "Rotate", DragKind.Scale => "Scale", _ => "Move" });
+            }
+            else if (_marqueeFrom is not null)
+            {
+                FinishObjectMarquee(app, origin, size);
             }
             else if (Vector2.Distance(io.MousePos, _dragMouseStart) < 4)
             {
@@ -391,20 +399,22 @@ internal sealed partial class RenderWindow
         // ---- keys
         if ((focused || hovered) && !io.WantTextInput && !_looking && _drag == DragKind.None)
         {
+            // The navmesh tool has CK's own keys (T V G W A F I O P Q R D): the object tool keys stay out of its way.
+            var navKeys = _tool == EditTool.Navmesh;
             if (!io.KeyCtrl && !io.KeyShift)
             {
-                if (ImGui.IsKeyPressed(ImGuiKey.Q, false)) _tool = EditTool.Select;
-                if (ImGui.IsKeyPressed(ImGuiKey.W, false)) _tool = EditTool.Move;
+                if (ImGui.IsKeyPressed(ImGuiKey.Q, false) && !navKeys) _tool = EditTool.Select;
+                if (ImGui.IsKeyPressed(ImGuiKey.W, false) && !navKeys) _tool = EditTool.Move;
                 if (ImGui.IsKeyPressed(ImGuiKey.E, false)) _tool = EditTool.Rotate;
-                if (ImGui.IsKeyPressed(ImGuiKey.R, false)) _tool = EditTool.Scale;
+                if (ImGui.IsKeyPressed(ImGuiKey.R, false) && !navKeys) _tool = EditTool.Scale;
                 if (ImGui.IsKeyPressed(ImGuiKey.H, false) && !io.KeyAlt) _tool = _tool == EditTool.Land ? EditTool.Select : EditTool.Land;
                 if (ImGui.IsKeyPressed(ImGuiKey.H, false) && io.KeyAlt) RunHavokSim();
                 if (ImGui.IsKeyPressed(ImGuiKey.N, false)) SetNavmeshMode(_tool != EditTool.Navmesh);
                 if (ImGui.IsKeyPressed(ImGuiKey.L, false)) _localSpace ^= true;
-                if (ImGui.IsKeyPressed(ImGuiKey.G, false)) _gridSnap ^= true;
+                if (ImGui.IsKeyPressed(ImGuiKey.G, false) && !navKeys) _gridSnap ^= true;
                 if (ImGui.IsKeyPressed(ImGuiKey.F, false) && _tool != EditTool.Navmesh) DropToGround();
                 if (ImGui.IsKeyPressed(ImGuiKey.C, false)) FrameSelection();
-                if (ImGui.IsKeyPressed(ImGuiKey.T, false)) TopView();
+                if (ImGui.IsKeyPressed(ImGuiKey.T, false) && !navKeys) TopView();
                 if (ImGui.IsKeyPressed(ImGuiKey.M, false)) _renderer!.Options.ShowMarkers ^= true;
                 if (ImGui.IsKeyPressed(ImGuiKey.F4, false) && !io.KeyCtrl) _renderer!.Options.ShowCollision ^= true;
                 if (ImGui.IsKeyPressed(ImGuiKey.B, false)) _renderer!.Options.CellBorders ^= true;
@@ -414,7 +424,7 @@ internal sealed partial class RenderWindow
             }
             if (ImGui.IsKeyPressed(ImGuiKey.W, false) && io.KeyShift) _renderer!.Options.Wireframe ^= true;
             if (ImGui.IsKeyPressed(ImGuiKey.Delete, false) && _tool is not (EditTool.Navmesh or EditTool.Region)) DeleteSelection();
-            if (io.KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.D, false)) DuplicateSelection(app);
+            if (io.KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.D, false) && !navKeys) DuplicateSelection(app);
             if (io.KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.C, false)) CopySelection(app);
             if (io.KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.X, false)) CutSelection(app);
             if (io.KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.V, false)) Paste(app, inPlace: io.KeyShift, ImGui.GetMousePos());

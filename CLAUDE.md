@@ -5,7 +5,7 @@
 STB Editor — a standalone replacement for the Skyrim Creation Kit (placement, cells, landscape,
 navmesh, record editing, script properties without compiling). Plan and reasoning:
 `docs/PLAN.md`, teardown of the SkyrimMapEditor concept and of CK: `docs/ANALYSIS.md`.
-Status (v0.72.4, 2026-10-16) — the table in `README.md` is the source of truth. Done: data, NIF,
+Status (v0.73.0, 2026-10-21) — the table in `README.md` is the source of truth. Done: data, NIF,
 D3D11 view incl. particles/billboards/shader animation, NPCs from race/outfit/FaceGen in bind pose;
 ref edits with undo (`Core/EditDocument`), CK-style drags + ImGuizmo (`Panels/RenderWindow.Editing.cs`),
 lossless saving into an active plugin (`Core/PluginWriter` + `Data/Raw/RawSplice`,
@@ -176,6 +176,11 @@ vertex shader (`Shaders.Lines` VSNavNear 8 / VSNavFar 48 — same screen place, 
 rubble without showing it through walls); `stbedit-cli navcover` measures what covers a cell's navmesh.
 v0.72.4: `LandscapeData.StoredNormals` — VNML bytes written back unchanged unless heights were edited (re-encoding normalised
 normals moved them a step and made lighting seams); CLI `landseam` / `landseamfix` for texture seams at cell corners.
+v0.73.0: XPRM bounds are full sizes (`SceneBuilder` halves them into `SceneObject.Primitive`); marquee selection
+(`Panels/RenderWindow.Marquee.cs`, Shift+drag anywhere); CK navmesh toolbar + keys (`Panels/RenderWindow.NavmeshToolbar.cs`:
+select modes incl. edges `NavmeshSelection.Edges`, `RenderOptions.NavmeshView`, flood fill, quad, edge rotate, A* path test).
+In navmesh mode the object-tool keys Q W R G T F step aside for CK's navmesh keys. CK's tooltips live as plain ASCII in
+CreationKit.exe around 0x2921d10 (main toolbar) / 0x2922540 (navmesh) — the toolbar resources have no strings.
 Next: what is still missing against CK and xEdit, with priorities and order — `docs/GAPS.md` (update it when a gap closes).
 Developer docs: `docs/DEVELOPING.md`, `docs/RENDERING.md`, history in `CHANGELOG.md` —
 **keep them, README and this file current with every feature** (several people work on this repo,

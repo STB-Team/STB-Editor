@@ -15,16 +15,25 @@ namespace StbEditor.App.Panels;
 /// Manual navmesh editing (CK's navmesh mode, without generation): click selects a vertex or a
 /// triangle (Ctrl adds), LMB drag moves the selection (Z: height), Shift+click on the ground adds a
 /// vertex — with two vertices selected it also makes the triangle, so strips grow click by click.
-/// Del deletes, F drops vertices to the ground, and the Navmesh panel has merge, flags and more.
+/// R / Del deletes, F flood fills (CK keys, see RenderWindow.NavmeshToolbar.cs), and the Navmesh panel has merge, flags and more.
 /// Each operation is one undo step on an edited copy of the NAVM.
 /// </summary>
 internal sealed partial class RenderWindow
 {
     private NavmeshSelection? _navSelection;
+
+    /// <summary>What a click picks (CK: Select triangles T / vertices V); Auto = the vertex near the cursor, else the triangle.</summary>
+    internal enum NavSelectMode { Auto, Triangles, Vertices, Edges }
+
+    private NavSelectMode _navSelectMode = NavSelectMode.Auto;
+
+    public NavSelectMode NavmeshSelectMode { get => _navSelectMode; set => _navSelectMode = value; }
     private NavigationMesh? _navDrag;
     private Vector3 _navDragStart;
     private Dictionary<int, Vector3>? _navDragOrigin;
     private bool _navPressed;
+    private bool _navMarqueePress;
+    private bool _navShiftPress;
     private Vector2 _navPressMouse;
 
     public bool NavmeshMode => _tool == EditTool.Navmesh;
@@ -42,34 +51,41 @@ internal sealed partial class RenderWindow
     private void HandleNavmesh(EditorApp app, Vector2 mouse, Vector2 size, bool hovered)
     {
         if (_scene is null || app.Session is null) return;
-        if (_renderer is not null) _renderer.Options.ShowNavmesh = true;
         var io = ImGui.GetIO();
         var (origin, direction) = _camera.Ray(mouse, size);
 
-        if (hovered && ImGui.IsMouseClicked(ImGuiMouseButton.Left) && !io.KeyAlt)
+        if (hovered && ImGui.IsMouseClicked(ImGuiMouseButton.Left) && !io.KeyAlt && PathTestClick(mouse, size, origin, direction)) { }
+        else if (hovered && ImGui.IsMouseClicked(ImGuiMouseButton.Left) && !io.KeyAlt)
         {
             _navPressed = true;
             _navPressMouse = io.MousePos;
 
             if (io.KeyShift)
             {
-                AddVertex(app, origin, direction);
+                // Shift: a click adds a vertex (on release), a drag draws a selection rectangle.
                 _navPressed = false;
+                _navMarqueePress = true;
+                _navShiftPress = true;
             }
             else
             {
-                var hit = PickNavmesh(mouse, size, origin, direction);
+                var hit = PickNavmesh(mouse, size, origin, direction, _navSelectMode);
                 var keep = io.KeyCtrl;
                 if (hit is { } h)
                 {
                     if (_navSelection is null || _navSelection.Mesh != h.Mesh || !keep)
                     {
                         var alreadySelected = _navSelection is { } s && s.Mesh == h.Mesh
-                            && (h.Vertex is { } v0 ? s.Vertices.Contains(v0) : s.Triangles.Contains(h.Triangle));
+                            && (h.Edge is { } e0 ? s.Edges.Contains(e0) : h.Vertex is { } v0 ? s.Vertices.Contains(v0) : s.Triangles.Contains(h.Triangle));
                         if (!alreadySelected) _navSelection = new NavmeshSelection { Mesh = h.Mesh };
                     }
                     var sel = _navSelection!;
-                    if (h.Vertex is { } vertex)
+                    if (h.Edge is { } edge)
+                    {
+                        if (keep && sel.Edges.Contains(edge)) sel.Edges.Remove(edge);
+                        else sel.Edges.Add(edge);
+                    }
+                    else if (h.Vertex is { } vertex)
                     {
                         if (keep && sel.Vertices.Contains(vertex)) sel.Vertices.Remove(vertex);
                         else sel.Vertices.Add(vertex);
@@ -78,10 +94,11 @@ internal sealed partial class RenderWindow
                     else sel.Triangles.Add(h.Triangle);
                     _navDragStart = h.Point;
                 }
-                else if (!keep)
+                else
                 {
-                    _navSelection = null;
+                    // Empty space: a drag draws a selection rectangle, a click (without Ctrl) clears.
                     _navPressed = false;
+                    _navMarqueePress = true;
                 }
             }
         }
@@ -124,8 +141,18 @@ internal sealed partial class RenderWindow
             }
         }
 
+        if (_navMarqueePress && ImGui.IsMouseDown(ImGuiMouseButton.Left)) MarqueeGrowing(_navPressMouse);
+
         if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
         {
+            if (_navMarqueePress)
+            {
+                if (_marqueeFrom is not null) FinishNavmeshMarquee(io.MousePos - mouse, size);
+                else if (_navShiftPress) AddVertex(app, origin, direction);
+                else if (!io.KeyCtrl) _navSelection = null;
+                _navMarqueePress = false;
+                _navShiftPress = false;
+            }
             if (_navDrag is not null && _navSelection is { } done)
             {
                 NavmeshTools.Rebuild(_navDrag);
@@ -136,12 +163,7 @@ internal sealed partial class RenderWindow
             _navPressed = false;
         }
 
-        if ((ImGui.IsWindowFocused() || hovered) && !io.WantTextInput && _navSelection is { IsEmpty: false })
-        {
-            if (ImGui.IsKeyPressed(ImGuiKey.Delete, false)) DeleteNavmeshSelection();
-            if (ImGui.IsKeyPressed(ImGuiKey.F, false)) DropNavmeshVertices();
-            if (ImGui.IsKeyPressed(ImGuiKey.Escape, false)) _navSelection = null;
-        }
+        if ((ImGui.IsWindowFocused() || hovered) && !io.WantTextInput) HandleNavmeshKeys(app);
 
         if (_renderer is not null) _renderer.NavSelection = _navSelection;
     }
@@ -152,6 +174,7 @@ internal sealed partial class RenderWindow
     private static HashSet<int> DragVertices(NavmeshSelection selection, INavigationMeshGetter mesh)
     {
         var result = new HashSet<int>(selection.Vertices);
+        foreach (var (a, b) in selection.Edges) { result.Add(a); result.Add(b); }
         foreach (var t in selection.Triangles)
         {
             if (t >= mesh.Data!.Triangles.Count) continue;
@@ -163,10 +186,13 @@ internal sealed partial class RenderWindow
         return result;
     }
 
-    private readonly record struct NavHit(FormKey Mesh, int? Vertex, int Triangle, Vector3 Point);
+    private readonly record struct NavHit(FormKey Mesh, int? Vertex, int Triangle, Vector3 Point, (int A, int B)? Edge = null);
 
-    /// <summary>A vertex within 10 px of the cursor wins; else the triangle under it.</summary>
-    private NavHit? PickNavmesh(Vector2 mouse, Vector2 size, Vector3 origin, Vector3 direction)
+    /// <summary>
+    /// Auto: a vertex within 10 px of the cursor wins, else the triangle under it. Triangles: only the triangle. Vertices: the vertex
+    /// within 10 px, else the corner of the triangle under the cursor nearest to it.
+    /// </summary>
+    private NavHit? PickNavmesh(Vector2 mouse, Vector2 size, Vector3 origin, Vector3 direction, NavSelectMode mode = NavSelectMode.Auto)
     {
         var viewProj = _camera.View * _camera.Projection(size.X / size.Y);
         NavHit? best = null;
@@ -190,7 +216,8 @@ internal sealed partial class RenderWindow
                 }
             }
         }
-        if (best is not null) return best;
+        if (best is not null && mode != NavSelectMode.Triangles) return best;
+        best = null;
 
         foreach (var view in _scene.Navmeshes)
         {
@@ -206,7 +233,29 @@ internal sealed partial class RenderWindow
                 }
             }
         }
+        if (mode == NavSelectMode.Vertices && best is { } tri && View(tri.Mesh)?.Record.Data is { } mesh)
+        {
+            var corners = mesh.Triangles[tri.Triangle].Vertices;
+            var nearest = new[] { (int)corners.X, corners.Y, corners.Z }.MinBy(i => Vector3.Distance(P(mesh.Vertices[i]), tri.Point));
+            return new NavHit(tri.Mesh, nearest, -1, P(mesh.Vertices[nearest]));
+        }
+        if (mode == NavSelectMode.Edges && best is { } under && View(under.Mesh)?.Record.Data is { } edgeMesh)
+        {
+            // The side of the triangle under the cursor nearest to where the ray met it.
+            var c = edgeMesh.Triangles[under.Triangle].Vertices;
+            int[] corners = [c.X, c.Y, c.Z];
+            var edge = Enumerable.Range(0, 3).Select(k => (A: corners[k], B: corners[(k + 1) % 3]))
+                .MinBy(e => DistanceToSegment(under.Point, P(edgeMesh.Vertices[e.A]), P(edgeMesh.Vertices[e.B])));
+            return under with { Edge = (Math.Min(edge.A, edge.B), Math.Max(edge.A, edge.B)) };
+        }
         return best;
+    }
+
+    private static float DistanceToSegment(Vector3 p, Vector3 a, Vector3 b)
+    {
+        var ab = b - a;
+        var t = ab.LengthSquared() > 0 ? Math.Clamp(Vector3.Dot(p - a, ab) / ab.LengthSquared(), 0, 1) : 0;
+        return Vector3.Distance(p, a + ab * t);
     }
 
     private void CommitNavmesh(string name, FormKey key, NavigationMesh edited)

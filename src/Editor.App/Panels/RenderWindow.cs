@@ -489,6 +489,7 @@ internal sealed partial class RenderWindow : Panel
 
         BrushOverlay();
         RegionOverlay(app);
+        NavPathOverlay();
         CollisionOverlay();
         ApplySky(app);
         UpdateBos(app);
@@ -514,6 +515,7 @@ internal sealed partial class RenderWindow : Panel
         DrawGizmo(origin, size);
         DrawDoorQuestion(app);
         DrawOverlay(app, drawList, origin, size);
+        DrawMarquee(drawList);
         DrawClaudeOverlay(drawList, origin, size);
         DrawProposalBanner(drawList, origin, size, hovered);
         AcceptDrop(app, origin, size);
@@ -704,6 +706,7 @@ internal sealed partial class RenderWindow : Panel
         if (ImGui.DragFloat("##speed", ref speed, 10f, 50f, 20000f, "speed %.0f")) _camera.Speed = speed;
 
         DrawEditToolbar();
+        if (NavmeshMode) DrawNavmeshToolbar(app);
     }
 
     private static void Toggle(string label, Func<bool> get, Action<bool> set, string? tooltip)

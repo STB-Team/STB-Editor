@@ -1029,6 +1029,32 @@ switch (command)
     case "navgen":
         FaceGenTests.NavGen(ws, args);
         break;
+    case "prims":
+    {
+        // prims <game> [plugin]: placed primitives (XPRM) — by type, how many carry a reference scale other than 1, examples.
+        var plugin = ws.Plugins.First(p => p.Name.Equals(args.Length > 2 ? args[2] : "Skyrim.esm", StringComparison.OrdinalIgnoreCase));
+        var mod = plugin.Mod!;
+        var primCatalog = RecordCatalog.Build(ws, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "STBEditor", "cache", "catalog"));
+        var byType = new Dictionary<string, (int Count, int Scaled, List<string> Examples)>();
+        foreach (var cell in mod.EnumerateMajorRecords<Mutagen.Bethesda.Skyrim.ICellGetter>())
+            foreach (var r in cell.Temporary.Concat(cell.Persistent).OfType<Mutagen.Bethesda.Skyrim.IPlacedObjectGetter>())
+            {
+                if (r.Primitive is not { } prim || prim.Type == Mutagen.Bethesda.Skyrim.PlacedPrimitive.TypeEnum.None) continue;
+                var baseId = r.Base.FormKey.ModKey.FileName + ":" + r.Base.FormKey.ID.ToString("X6");
+                var key = $"{prim.Type} {(primCatalog.ByKey.TryGetValue(r.Base.FormKey, out var b) ? b.EditorId : baseId)}";
+                if (!byType.TryGetValue(key, out var e)) e = (0, 0, []);
+                var scale = r.Scale ?? 1f;
+                if (Math.Abs(scale - 1) > 0.001f) e.Scaled++;
+                if (e.Examples.Count < 3) e.Examples.Add($"{r.FormKey.ID:X6} in {cell.EditorID} bounds {prim.Bounds} scale {scale:0.###} at {r.Placement?.Position} rot {r.Placement?.Rotation}");
+                byType[key] = (e.Count + 1, e.Scaled, e.Examples);
+            }
+        foreach (var (k, e) in byType.OrderByDescending(p => p.Value.Count).Take(30))
+        {
+            Console.WriteLine($"{k}: {e.Count}, scale != 1: {e.Scaled}");
+            foreach (var x in e.Examples) Console.WriteLine("    " + x);
+        }
+        break;
+    }
     case "landseamfix":
         StbEditor.Cli.LandSeamFix.Run(ws, game, args);
         break;
@@ -1516,7 +1542,7 @@ switch (command)
         var cacheDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "STBEditor", "cache", "catalog");
         var catalog = RecordCatalog.Build(ws, cacheDir);
         var lookup = new RecordLookup(ws, catalog);
-        var plugin = ws.Active.First(p => p.Name.Equals(args.Length > 2 ? args[2] : "Skyrim.esm", StringComparison.OrdinalIgnoreCase));
+        var plugin = ws.Plugins.First(p => p.Name.Equals(args.Length > 2 ? args[2] : "Skyrim.esm", StringComparison.OrdinalIgnoreCase));
         var cells = catalog.BySignature["CELL"].Where(c => c.Plugins.Contains(plugin) && c.Winner.Cell?.IsInterior == true).ToList();
         var issues = cells.SelectMany(c => StbEditor.Core.PluginChecks.RoomIssues(lookup, c.FormKey).Select(i => (Cell: c.EditorId, Issue: i))).ToList();
         Console.WriteLine($"{cells.Count} interiors, {issues.Count} room / portal issue(s)");

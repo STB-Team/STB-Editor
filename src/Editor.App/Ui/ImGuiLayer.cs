@@ -88,6 +88,10 @@ internal sealed unsafe class ImGuiLayer : IDisposable
     public static Queue<ImGuiKey> TestKeys { get; } = new();
     private static ImGuiKey? _testKeyDown;
 
+    /// <summary>Autotests: Shift held while true.</summary>
+    public static bool TestShift { get; set; }
+    private static bool _testShiftSent;
+
     public void NewFrame()
     {
         ImGuiImplD3D11.NewFrame();
@@ -97,6 +101,12 @@ internal sealed unsafe class ImGuiLayer : IDisposable
             var io = ImGui.GetIO();
             io.AddMousePosEvent(mouse.Position.X, mouse.Position.Y);
             io.AddMouseButtonEvent(TestMouseButton, mouse.Down);
+        }
+        if (TestShift != _testShiftSent)
+        {
+            ImGui.GetIO().AddKeyEvent(ImGuiKey.ModShift, TestShift);
+            ImGui.GetIO().AddKeyEvent(ImGuiKey.LeftShift, TestShift);
+            _testShiftSent = TestShift;
         }
         if (TestWheel != 0)
         {

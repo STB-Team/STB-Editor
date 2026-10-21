@@ -51,7 +51,7 @@ internal sealed class NavmeshPanel : Panel
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Parts of the navmesh under rubble, rugs or bumpy rock (up to about 48 units above it) are drawn faint; walls still cover it. The game's navmesh lies near the ground, not exactly on it (CK hides those parts); actors walk on the collision, the navmesh only tells them where."));
         }
         ImGui.TextColored(Theme.TextDim, TF($"{scene.Navmeshes.Count} navmesh(es) loaded, {scene.Navmeshes.Sum(n => n.Record.Data?.Triangles.Count ?? 0):N0} triangles"));
-        ImGui.TextWrapped(T("Click: vertex or triangle (Ctrl adds). Drag: move (hold Z for height). Shift+click on the ground: new vertex — with 2 selected it also makes the triangle. Del deletes, F drops to the ground."));
+        ImGui.TextWrapped(T("Click: vertex or triangle (Ctrl adds; T / V / G pick only triangles / vertices / edges). Drag: move (hold Z for height). Drag on empty space or Shift+drag: selection rectangle. Shift+click on the ground: new vertex — with 2 selected it also makes the triangle. R / Del deletes, F flood fills; the row of buttons over the view has CK's navmesh toolbar."));
         if (ImGui.Button(T("Finalize edited"))) _summary = window.FinalizeNavmeshes(app, true) ?? _summary;
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Door triangles and door links, edge links to neighbouring navmeshes, the navmesh info map (NAVI) — for the edited navmeshes (CK: Finalize)"));
         ImGui.SameLine();
@@ -98,7 +98,7 @@ internal sealed class NavmeshPanel : Panel
 
         if (ImGui.Button(T("Delete (Del)"))) window.DeleteNavmeshSelection();
         ImGui.SameLine();
-        if (ImGui.Button(T("Drop to ground (F)"))) window.DropNavmeshVertices();
+        if (ImGui.Button(T("Drop to ground"))) window.DropNavmeshVertices();
         ImGui.BeginDisabled(selection.Vertices.Count != 3);
         if (ImGui.Button(T("Triangle from 3 vertices"))) window.CreateNavmeshTriangle();
         ImGui.EndDisabled();

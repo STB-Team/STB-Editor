@@ -104,6 +104,9 @@ public sealed class RenderOptions
     /// <summary>Navmesh overlay (CK: the navmesh view of the render window).</summary>
     public bool ShowNavmesh { get; set; }
 
+    /// <summary>CK's navmesh view modes (W): with the scene, drawn over everything, or the navmesh alone.</summary>
+    public NavmeshViewMode NavmeshView { get; set; }
+
     /// <summary>Navmesh parts under floor clutter, rugs or bumpy rock (up to ~48 units) drawn faint instead of not at all.</summary>
     public bool NavmeshThrough { get; set; } = true;
 
@@ -209,6 +212,8 @@ public struct LineVertex(Vector3 position, uint color)
 /// Forward renderer for one scene. Opaque shapes are grouped by GPU shape and drawn instanced;
 /// blended ones are sorted back to front; terrain is base layer plus blended alpha layers.
 /// </summary>
+public enum NavmeshViewMode { Standard, OnTop, Only }
+
 public sealed unsafe class SceneRenderer : IDisposable
 {
     [StructLayout(LayoutKind.Sequential, Pack = 4)]
@@ -305,6 +310,7 @@ public sealed unsafe class SceneRenderer : IDisposable
     private readonly ID3D11DepthStencilState _depthWrite;
     private readonly ID3D11DepthStencilState _depthRead;
     private readonly ID3D11DepthStencilState _depthOverlay;
+    private readonly ID3D11DepthStencilState _depthNone;
     private readonly ID3D11BlendState _opaque;
     private readonly ID3D11BlendState _alphaBlend;
     private readonly Dictionary<int, ID3D11BlendState> _niBlends = new();
@@ -420,6 +426,7 @@ public sealed unsafe class SceneRenderer : IDisposable
         _depthWrite = device.CreateDepthStencilState(new DepthStencilDescription(true, DepthWriteMask.All, ComparisonFunction.Greater));
         _depthRead = device.CreateDepthStencilState(new DepthStencilDescription(true, DepthWriteMask.Zero, ComparisonFunction.GreaterEqual));
         _depthOverlay = device.CreateDepthStencilState(new DepthStencilDescription(true, DepthWriteMask.Zero, ComparisonFunction.GreaterEqual));
+        _depthNone = device.CreateDepthStencilState(new DepthStencilDescription(false, DepthWriteMask.Zero, ComparisonFunction.Always));
 
         _opaque = device.CreateBlendState(BlendDescription.Opaque);
         _alphaBlend = device.CreateBlendState(BlendDescription.NonPremultiplied);
@@ -521,13 +528,15 @@ public sealed unsafe class SceneRenderer : IDisposable
         ctx.VSSetConstantBuffers(0, [_frameBuffer]);
         ctx.PSSetConstantBuffers(0, [_frameBuffer]);
 
-        if (Options.ShowTerrain) DrawTerrain(scene, frustum);
+        // Navmesh only (CK view mode): the scene is left out.
+        var sceneShown = !(Options.ShowNavmesh && Options.NavmeshView == NavmeshViewMode.Only);
+        if (Options.ShowTerrain && sceneShown) DrawTerrain(scene, frustum);
 
         CollectObjects(scene, camera, frustum, selection);
-        if (Options.ShowGrass && Options.ShowTerrain && scene.Grasses is { } grassOf) CollectGrass(scene, camera, frustum, grassOf);
-        if (Options.DrawOpaquePass) DrawOpaque();
-        if (Options.ShowWater) DrawWater(scene);
-        if (Options.DrawBlendedPass) DrawBlended();
+        if (Options.ShowGrass && Options.ShowTerrain && sceneShown && scene.Grasses is { } grassOf) CollectGrass(scene, camera, frustum, grassOf);
+        if (Options.DrawOpaquePass && sceneShown) DrawOpaque();
+        if (Options.ShowWater && sceneShown) DrawWater(scene);
+        if (Options.DrawBlendedPass && sceneShown) DrawBlended();
         // After the blended pass: low mist cards (FXMistLow…) lie over the floors and covered it in dark patches.
         if (Options.ShowNavmesh) DrawNavmeshes(scene);
         if (Options.ShowMarkers) DrawPrimitives(scene, frustum);
@@ -1308,7 +1317,7 @@ public sealed unsafe class SceneRenderer : IDisposable
     {
         // Rebuild the overlay only when a navmesh or the selection changed.
         var key = (scene, scene.Navmeshes.Sum(n => n.Version + n.Record.GetHashCode() % 1000), scene.Navmeshes.Count,
-            NavSelection is { } picked ? $"{picked.Mesh}|{string.Join(',', picked.Vertices)}|{string.Join(',', picked.Triangles)}" : "");
+            NavSelection is { } picked ? $"{picked.Mesh}|{string.Join(',', picked.Vertices)}|{string.Join(',', picked.Triangles)}|{string.Join(',', picked.Edges)}" : "");
         if (key == _navCacheKey && _navFill.Count > 0)
         {
             SubmitNavmesh();
@@ -1366,6 +1375,17 @@ public sealed unsafe class SceneRenderer : IDisposable
                     _navEdges.Add(new LineVertex(p, color));
                     _navEdges.Add(new LineVertex(p + new Vector3(0, 0, s * 2), color));
                 }
+                // Selected edges: three lines a little apart, so they read thicker than the rest.
+                foreach (var (a, b) in selected.Edges)
+                {
+                    if (a >= vertices.Count || b >= vertices.Count) continue;
+                    const uint color = 0xFFFF40FF;
+                    foreach (var dz in new[] { 0f, 2f, 4f })
+                    {
+                        _navEdges.Add(new LineVertex(P(vertices[a]) + lift + new Vector3(0, 0, dz), color));
+                        _navEdges.Add(new LineVertex(P(vertices[b]) + lift + new Vector3(0, 0, dz), color));
+                    }
+                }
             }
         }
 
@@ -1416,10 +1436,10 @@ public sealed unsafe class SceneRenderer : IDisposable
         ctx.PSSetShader(_linePs);
         ctx.RSSetState(_cullNone);
         ctx.OMSetBlendState(_alphaBlend);
-        ctx.OMSetDepthStencilState(_depthRead);
+        ctx.OMSetDepthStencilState(Options.NavmeshView == NavmeshViewMode.OnTop ? _depthNone : _depthRead);
         // The game's navmesh lies near the floor, not on it: under rubble, rugs or bumpy rock it would be hidden. A faint
         // copy pulled far toward the camera shows those parts (walls still cover it), then the navmesh itself.
-        if (Options.NavmeshThrough) Pass(_navFarVs, _navFillFaint!, _navEdgeFaint);
+        if (Options.NavmeshThrough && Options.NavmeshView == NavmeshViewMode.Standard) Pass(_navFarVs, _navFillFaint!, _navEdgeFaint);
         Pass(_navNearVs, _navFillBuffer!, _navEdgeBuffer);
         ctx.VSSetShader(_lineVs);
         ctx.OMSetBlendState(_opaque);
@@ -1558,7 +1578,7 @@ public sealed unsafe class SceneRenderer : IDisposable
         _particleVs.Dispose(); _particleLayout.Dispose(); _particleBuffer?.Dispose(); _particleIndices?.Dispose();
         _frameBuffer.Dispose(); _materialBuffer.Dispose(); _instanceBuffer.Dispose(); _lineBuffer.Dispose(); _terrainIndices.Dispose();
         _cullBack.Dispose(); _cullNone.Dispose(); _wireframe.Dispose(); _overlayWire.Dispose();
-        _depthWrite.Dispose(); _depthRead.Dispose(); _depthOverlay.Dispose();
+        _depthWrite.Dispose(); _depthRead.Dispose(); _depthOverlay.Dispose(); _depthNone.Dispose();
         _opaque.Dispose(); _alphaBlend.Dispose(); _sampler.Dispose(); _clampSampler.Dispose();
     }
 }

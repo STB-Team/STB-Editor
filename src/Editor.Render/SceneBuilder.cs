@@ -368,7 +368,9 @@ public sealed class SceneBuilder(Workspace workspace, RecordCatalog catalog)
         if (placed is IPlacedObjectGetter { Primitive: { } primitive } && primitive.Type != PlacedPrimitive.TypeEnum.None)
         {
             var c = primitive.Color;
-            obj.Primitive = (new Vector3(primitive.Bounds.X, primitive.Bounds.Y, primitive.Bounds.Z), (int)primitive.Type,
+            // XPRM holds full sizes (a portal 256 x 320 fills a Nordic doorway; bookshelf triggers 35 high stack 47 apart):
+            // the scene keeps half extents.
+            obj.Primitive = (new Vector3(primitive.Bounds.X, primitive.Bounds.Y, primitive.Bounds.Z) / 2, (int)primitive.Type,
                 0xFF000000u | ((uint)c.B << 16) | ((uint)c.G << 8) | c.R);
         }
         obj.UpdateBounds();
