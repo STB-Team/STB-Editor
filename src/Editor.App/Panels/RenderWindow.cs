@@ -705,7 +705,7 @@ internal sealed partial class RenderWindow : Panel
         var speed = _camera.Speed;
         if (ImGui.DragFloat("##speed", ref speed, 10f, 50f, 20000f, "speed %.0f")) _camera.Speed = speed;
 
-        DrawEditToolbar();
+        DrawEditToolbar(app);
         if (NavmeshMode) DrawNavmeshToolbar(app);
     }
 

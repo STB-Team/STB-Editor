@@ -134,7 +134,7 @@ internal sealed partial class RenderWindow
 
     public EditTool Tool => _tool;
 
-    private void DrawEditToolbar()
+    private void DrawEditToolbar(EditorApp app)
     {
         ToolButton(T("Select"), EditTool.Select, T("Q — select only"));
         ToolButton(T("Move"), EditTool.Move, T("W — move gizmo (LMB drag on the object works with any tool)"));
@@ -167,6 +167,7 @@ internal sealed partial class RenderWindow
         ImGui.EndDisabled();
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
             ImGui.SetTooltip(T("Alt+H — Run Havok Sim: the selected objects fall with physics onto what is around them and come to rest (one Ctrl+Z)"));
+        DrawCreateMenu(app);
     }
 
     // ------------------------------------------------------------------ Havok sim

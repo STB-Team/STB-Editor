@@ -154,7 +154,7 @@ public static class RecordTypes
 
     /// <summary>Types that are placed in the world, i.e. can be dragged into the render window.</summary>
     public static bool IsPlaceable(string signature) => signature is
-        "ACTI" or "TACT" or "CONT" or "DOOR" or "FLOR" or "FURN" or "LIGH" or "MSTT" or "STAT" or "SCOL" or "TREE"
+        "ACTI" or "ASPC" or "TACT" or "CONT" or "DOOR" or "FLOR" or "FURN" or "LIGH" or "MSTT" or "STAT" or "SCOL" or "TREE"
         or "IDLM" or "ADDN" or "HAZD" or "ARTO" or "SOUN" or "AMMO" or "ARMO" or "BOOK" or "INGR" or "KEYM" or "MISC"
         or "ALCH" or "SCRL" or "SLGM" or "WEAP" or "NPC_" or "LVLN";
 }

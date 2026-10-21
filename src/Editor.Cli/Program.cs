@@ -1039,16 +1039,25 @@ switch (command)
         foreach (var cell in mod.EnumerateMajorRecords<Mutagen.Bethesda.Skyrim.ICellGetter>())
             foreach (var r in cell.Temporary.Concat(cell.Persistent).OfType<Mutagen.Bethesda.Skyrim.IPlacedObjectGetter>())
             {
+                // Multibound primitives and water currents, whatever their primitive.
+                if (r.IsMultiBoundPrimitive || r.WaterVelocity is not null || r.XCVL is not null || r.XWCN is not null)
+                {
+                    var what = r.IsMultiBoundPrimitive ? "MULTIBOUND" : "CURRENT";
+                    var bk = $"{what} {(primCatalog.ByKey.TryGetValue(r.Base.FormKey, out var bb) ? bb.EditorId + " " + bb.Signature + " " + ws.FormIdText(r.Base.FormKey) : r.Base.FormKey.ToString())} prim {r.Primitive?.Type} colour {r.Primitive?.Color.R},{r.Primitive?.Color.G},{r.Primitive?.Color.B} layer {r.CollisionLayer} vel {r.WaterVelocity?.Offset} {r.WaterVelocity?.Angle}";
+                    if (!byType.TryGetValue(bk, out var be)) be = (0, 0, []);
+                    if (be.Examples.Count < 2) be.Examples.Add($"{r.FormKey.ID:X6} in {cell.EditorID} bounds {r.Primitive?.Bounds}");
+                    byType[bk] = (be.Count + 1, be.Scaled, be.Examples);
+                }
                 if (r.Primitive is not { } prim || prim.Type == Mutagen.Bethesda.Skyrim.PlacedPrimitive.TypeEnum.None) continue;
                 var baseId = r.Base.FormKey.ModKey.FileName + ":" + r.Base.FormKey.ID.ToString("X6");
-                var key = $"{prim.Type} {(primCatalog.ByKey.TryGetValue(r.Base.FormKey, out var b) ? b.EditorId : baseId)}";
+                var key = $"{prim.Type} {(primCatalog.ByKey.TryGetValue(r.Base.FormKey, out var b) ? b.EditorId + " " + b.Signature + " " + ws.FormIdText(r.Base.FormKey) : baseId)} layer {r.CollisionLayer} colour {prim.Color.R},{prim.Color.G},{prim.Color.B} unknown {prim.Unknown} multibound {r.IsMultiBoundPrimitive} flags 0x{(uint)r.MajorRecordFlagsRaw:X}";
                 if (!byType.TryGetValue(key, out var e)) e = (0, 0, []);
                 var scale = r.Scale ?? 1f;
                 if (Math.Abs(scale - 1) > 0.001f) e.Scaled++;
                 if (e.Examples.Count < 3) e.Examples.Add($"{r.FormKey.ID:X6} in {cell.EditorID} bounds {prim.Bounds} scale {scale:0.###} at {r.Placement?.Position} rot {r.Placement?.Rotation}");
                 byType[key] = (e.Count + 1, e.Scaled, e.Examples);
             }
-        foreach (var (k, e) in byType.OrderByDescending(p => p.Value.Count).Take(30))
+        foreach (var (k, e) in byType.OrderByDescending(p => p.Value.Count).Take(args.Length > 3 ? int.Parse(args[3]) : 30))
         {
             Console.WriteLine($"{k}: {e.Count}, scale != 1: {e.Scaled}");
             foreach (var x in e.Examples) Console.WriteLine("    " + x);

@@ -5,7 +5,7 @@
 STB Editor — a standalone replacement for the Skyrim Creation Kit (placement, cells, landscape,
 navmesh, record editing, script properties without compiling). Plan and reasoning:
 `docs/PLAN.md`, teardown of the SkyrimMapEditor concept and of CK: `docs/ANALYSIS.md`.
-Status (v0.75.0, 2026-10-21) — the table in `README.md` is the source of truth. Done: data, NIF,
+Status (v0.76.0, 2026-10-21) — the table in `README.md` is the source of truth. Done: data, NIF,
 D3D11 view incl. particles/billboards/shader animation, NPCs from race/outfit/FaceGen in bind pose;
 ref edits with undo (`Core/EditDocument`), CK-style drags + ImGuizmo (`Panels/RenderWindow.Editing.cs`),
 lossless saving into an active plugin (`Core/PluginWriter` + `Data/Raw/RawSplice`,
@@ -188,6 +188,9 @@ v0.75.0: landscape brush modes SetHeight / RaiseTo / LowerTo / Noise / Erase / G
 `TargetHeight` (Ctrl+click samples), `MaxOpacity` (`LandscapeData.Paint(max)`); grass on/off = paint the dominant texture's twin
 with the same TXST and the other grass state (`RenderWindow.GrassTwins`; a full quadrant retextures as a whole —
 `LandscapeData.Retexture`). In this build some "NoGrass" LTEX carry grass (Landscape Fixes For Grass Mods) — go by GNAM, not names.
+v0.76.0: the render window's Create menu (`Panels/RenderWindow.Primitives.cs`: CK main toolbar primitives with Skyrim.esm's bases
+000017 PlaneMarker / 00001F RoomMarker / 000020 PortalMarker / 000021 CollisionMarker, vanilla colours and XPRM unknown; place then
+one `ReferenceProperties.Apply` with the XPRM; portals = XPOD origin / destination, joined rooms = XLRM). ASPC is placeable.
 Next: what is still missing against CK and xEdit, with priorities and order — `docs/GAPS.md` (update it when a gap closes).
 Developer docs: `docs/DEVELOPING.md`, `docs/RENDERING.md`, history in `CHANGELOG.md` —
 **keep them, README and this file current with every feature** (several people work on this repo,
