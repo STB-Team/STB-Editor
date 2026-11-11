@@ -10,16 +10,15 @@ using static StbEditor.App.Ui.Loc;
 namespace StbEditor.App.Panels;
 
 /// <summary>
-/// What the Claude bridge does in the Render Window: pictures of the view, camera moves, objects near the camera, edits as
-/// undoable steps (same paths as the mouse), Claude's notes drawn over the view, and the user's marks (K under the cursor)
-/// that tell Claude «here».
+/// What the AI bridge does in the Render Window: pictures, camera moves, loaded objects, structured undoable edits,
+/// AI notes and user marks (K under the cursor) that identify a place for a connected MCP client.
 /// </summary>
 internal sealed partial class RenderWindow
 {
-    /// <summary>A note of Claude's over the view: at a place or on a reference, with a colour.</summary>
+    /// <summary>An AI note over the view: at a place or on a reference, with a colour.</summary>
     public sealed record Annotation(Vector3 Position, string Text, uint Colour, FormKey? Reference);
 
-    /// <summary>A place the user marked for Claude (K): where, which cell and object, and what they wrote about it.</summary>
+    /// <summary>A place the user marked for AI (K): where, which cell and object, and what they wrote about it.</summary>
     public sealed class UserMark
     {
         public required int Number { get; init; }
@@ -48,7 +47,7 @@ internal sealed partial class RenderWindow
     public bool HasCaptures => _captures.Count > 0;
 
     /// <summary>The view's next frame as RGBA; with <paramref name="waitForStreaming"/> once meshes and textures have loaded (at most ~10 s).</summary>
-    /// <param name="overlay">With what is drawn over the view (Claude's notes, the user's marks, the corner text, the gizmo): taken from the
+    /// <param name="overlay">With what is drawn over the view (AI notes, the user's marks, the corner text, the gizmo): taken from the
     /// finished window frame, cut to the view.</param>
     public Task<(byte[] Rgba, int Width, int Height)> Capture(bool waitForStreaming, bool overlay = true)
     {
@@ -196,7 +195,7 @@ internal sealed partial class RenderWindow
         foreach (var o in objects) _selection.Add(o);
     }
 
-    /// <summary>K over the view: a numbered mark at the point under the cursor, for Claude.</summary>
+    /// <summary>K over the view: a numbered mark at the point under the cursor, for AI.</summary>
     private void PlaceMark(EditorApp app, Vector2 mouse, Vector2 size)
     {
         if (_scene is null) return;
@@ -209,11 +208,11 @@ internal sealed partial class RenderWindow
             Number = _nextMark++, Position = point, Cell = cell, World = _scene.Worldspace,
             Reference = hit?.Object.Reference, ReferenceLabel = hit?.Object.BaseEditorId,
         });
-        app.ClaudeWindow.Show();
+        app.AiWindow.Show();
     }
 
-    /// <summary>Claude's notes and the user's marks over the view.</summary>
-    private void DrawClaudeOverlay(ImDrawListPtr draw, Vector2 origin, Vector2 size)
+    /// <summary>AI notes and the user's marks over the view.</summary>
+    private void DrawAiOverlay(ImDrawListPtr draw, Vector2 origin, Vector2 size)
     {
         if (Annotations.Count == 0 && Marks.Count == 0) return;
         var projection = Matrix4x4.CreatePerspectiveFieldOfView(_camera.FieldOfView, size.X / size.Y, 1f, 1_000_000f);
@@ -250,5 +249,5 @@ internal sealed partial class RenderWindow
     }
 
     /// <summary>The caption of the mark key in Help.</summary>
-    public static string MarkKeyHelp => T("Mark the point under the cursor for Claude (Claude window: notes, delete)");
+    public static string MarkKeyHelp => T("Mark the point under the cursor for AI (AI / MCP window: notes, delete)");
 }

@@ -28,7 +28,7 @@ internal sealed class RegionsWindow
     {
         if (!_open || app.Session is not { } session) return;
         ImGui.SetNextWindowSize(app.Scaled(520, 620), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Regions") + "###regions", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Regions") + "###regions", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             var window = app.RenderWindow;
             if (window.Scene is not { IsInterior: false })

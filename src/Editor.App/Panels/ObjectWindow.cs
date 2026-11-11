@@ -53,6 +53,7 @@ internal sealed class ObjectWindow : Panel
     private int _scrolledToSelection = -1;
     private Dictionary<string, List<RecordTypeInfo>> _categories = new();
     private bool _tiles = true;
+    private bool _showTypes = true;
 
     /// <summary>Records picked with Ctrl/Shift+click (for Compare); the anchor is where a Shift range starts.</summary>
     private readonly HashSet<Mutagen.Bethesda.Plugins.FormKey> _picked = [];
@@ -87,7 +88,7 @@ internal sealed class ObjectWindow : Panel
     public void FocusSearch()
     {
         _focusSearch = true;
-        ImGui.SetWindowFocus(Name);
+        ImGui.SetWindowFocus(Title(Name));
     }
 
     public override void OnSessionChanged(EditorApp app)
@@ -108,36 +109,12 @@ internal sealed class ObjectWindow : Panel
         if (!RequireSession(app)) return;
         var session = app.Session!;
 
-        var leftWidth = 170 * ImGui.GetFontSize() / 16f;
-        ImGui.BeginChild("##types", new Vector2(leftWidth, 0), ImGuiChildFlags.ResizeX | ImGuiChildFlags.Borders);
-        DrawTypeTree(session.Catalog);
-        ImGui.EndChild();
-
-        ImGui.SameLine();
-        ImGui.BeginChild("##records", Vector2.Zero);
-
-        if (_focusSearch)
-        {
-            ImGui.SetKeyboardFocusHere();
-            _focusSearch = false;
-        }
-
         var em = ImGui.GetFontSize();
-        ImGui.SetNextItemWidth(-em * 4.5f);
-        if (ImGui.InputTextWithHint("##filter", T("Filter: EditorID, name or FormID   (Ctrl+F)"), ref _filter, 256)) _dirty = true;
-        ImGui.SameLine();
-        if (ImGui.SmallButton(_tiles ? T("List") : T("Tiles"))) _tiles ^= true;
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Thumbnails of placeable objects, or the record table"));
-
-        // Second row: which records (all / overridden / conflicts), from which plugin, how many, New.
-        ImGui.SetNextItemWidth(em * 6.5f);
-        string[] shows = [T("All records"), T("Overridden"), T("Conflicts")];
-        var show = (int)_show;
-        if (ImGui.Combo("##show", ref show, shows, shows.Length)) { _show = (Show)show; _dirty = true; }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(T("Overridden: more than one plugin has the record. Conflicts: some plugin's change is lost to the winner (as xEdit's conflict filter; checked field by field)"));
-        ImGui.SameLine();
-        DrawPluginFilter(app, em);
+        var width = ImGui.GetContentRegionAvail().X;
+        var compact = width < em * 32;
+        var toolbarRight = ImGui.GetCursorScreenPos().X + width;
+        DrawSearchToolbar(session.Catalog, compact, width);
+        DrawFilterToolbar(app, compact, toolbarRight);
 
         if (app.Session!.Catalog.Version != _catalogVersion)
         {
@@ -156,25 +133,22 @@ internal sealed class ObjectWindow : Panel
             }
         }
 
-        ImGui.SameLine();
-        ImGui.TextColored(Theme.TextDim, $"{_rows.Count:N0}");
-        if (_show == Show.Conflicts && _scan.IsRunning)
+        var count = $"{(_type == AllTypes ? T("All records") : _type)} · {_rows.Count:N0}" + (_show == Show.Conflicts && _scan.IsRunning ? " …" : "");
+        ContinueToolbar(toolbarRight, ImGui.CalcTextSize(count).X);
+        ImGui.TextColored(_show == Show.Conflicts && _scan.IsRunning ? Theme.Warning : Theme.TextDim, count);
+        if (_show == Show.Conflicts && _scan.IsRunning && ImGui.IsItemHovered())
+            ImGui.SetTooltip(TF($"checking: {_scan.Checked:N0} done, {_scan.Pending:N0} left"));
+        ImGui.Separator();
+
+        if (!compact && _showTypes)
         {
+            var leftWidth = Math.Min(em * 12, width * 0.3f);
+            ImGui.BeginChild("##types", new Vector2(leftWidth, 0), ImGuiChildFlags.ResizeX | ImGuiChildFlags.Borders);
+            DrawTypeTree(session.Catalog);
+            ImGui.EndChild();
             ImGui.SameLine();
-            ImGui.TextColored(Theme.Warning, TF($"checking: {_scan.Checked:N0} done, {_scan.Pending:N0} left"));
         }
-        if (SpreadsheetWindow.Has(_type))
-        {
-            ImGui.SameLine();
-            if (ImGui.SmallButton(T("Table"))) app.Spreadsheets.Show(_type);
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("All records of this type as a sortable table, edited in place"));
-        }
-        if (_type != AllTypes && NewFormDialog.CanCreate(_type))
-        {
-            ImGui.SameLine();
-            if (ImGui.SmallButton(T("+ New"))) app.NewForm.Show(_type);
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(TF($"A new {T(RecordTypes.Get(_type).Name)} in the active file (as the CK's New)"));
-        }
+        ImGui.BeginChild("##records", Vector2.Zero);
 
         // Ctrl+F4 (as in the CK): FaceGen for the selected NPCs.
         if (ImGui.IsWindowFocused(ImGuiFocusedFlags.ChildWindows) && !ImGui.GetIO().WantTextInput && ImGui.GetIO().KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.F4, false))
@@ -197,12 +171,107 @@ internal sealed class ObjectWindow : Panel
         ImGui.EndChild();
     }
 
-    /// <summary>Plugin combo: any, the active file, or one plugin of the load order (with a filter box).</summary>
-    private void DrawPluginFilter(EditorApp app, float em)
+    private void DrawSearchToolbar(RecordCatalog catalog, bool compact, float width)
     {
-        // Fills the row, leaving room for the count and «+ New».
-        var reserve = em * ((_type != AllTypes && NewFormDialog.CanCreate(_type) ? 8.5f : 4f) + (SpreadsheetWindow.Has(_type) ? 3.5f : 0f));
-        ImGui.SetNextItemWidth(Math.Max(em * 6, ImGui.GetContentRegionAvail().X - reserve));
+        var em = ImGui.GetFontSize();
+        if (ImGui.BeginTable("##catalogSearch", 3, ImGuiTableFlags.SizingFixedFit))
+        {
+            ImGui.TableSetupColumn("##typesControl", ImGuiTableColumnFlags.WidthFixed, Math.Min(em * 5, width * 0.24f));
+            ImGui.TableSetupColumn("##searchControl", ImGuiTableColumnFlags.WidthStretch);
+            var viewLabel = _tiles ? T("List") : T("Tiles");
+            ImGui.TableSetupColumn("##viewControl", ImGuiTableColumnFlags.WidthFixed, Math.Min(ImGui.CalcTextSize(viewLabel).X + ImGui.GetStyle().FramePadding.X * 2, width * 0.24f));
+            ImGui.TableNextColumn();
+            var typesExpanded = !compact && _showTypes;
+            if (Studio.Button(T("Types") + "###typesToggle", new Vector2(-1, 0), selected: typesExpanded))
+            {
+                if (compact) ImGui.OpenPopup("##typePicker");
+                else _showTypes = !_showTypes;
+            }
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Choose record types; click to show or hide the type tree"));
+            ImGui.SetNextWindowSize(new Vector2(Math.Min(width, em * 26), Math.Min(em * 24, ImGui.GetMainViewport().WorkSize.Y * 0.75f)), ImGuiCond.Appearing);
+            if (ImGui.BeginPopup("##typePicker"))
+            {
+                ImGui.BeginChild("##typeChoices", Vector2.Zero);
+                DrawTypeTree(catalog);
+                ImGui.EndChild();
+                ImGui.EndPopup();
+            }
+            ImGui.TableNextColumn();
+            if (_focusSearch)
+            {
+                ImGui.SetKeyboardFocusHere();
+                _focusSearch = false;
+            }
+            ImGui.SetNextItemWidth(-1);
+            if (ImGui.InputTextWithHint("##filter", T("Filter: EditorID, name or FormID   (Ctrl+F)"), ref _filter, 256)) _dirty = true;
+            ImGui.TableNextColumn();
+            if (Studio.Button(viewLabel + "###catalogView", new Vector2(-1, 0))) _tiles = !_tiles;
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Thumbnails of placeable objects, or the record table"));
+            ImGui.EndTable();
+        }
+    }
+
+    private void DrawFilterToolbar(EditorApp app, bool compact, float right)
+    {
+        var em = ImGui.GetFontSize();
+        if (compact)
+        {
+            if (Studio.Button(T("Filters") + (_plugin is not null || _show != Show.All ? " *" : "") + "###catalogFilters"))
+                ImGui.OpenPopup("##catalogFiltersPopup");
+            ImGui.SetNextWindowSize(new Vector2(Math.Min(ImGui.GetWindowWidth() - em * 2, em * 28), 0), ImGuiCond.Appearing);
+            if (ImGui.BeginPopup("##catalogFiltersPopup"))
+            {
+                DrawRecordScope(ImGui.GetContentRegionAvail().X);
+                DrawPluginFilter(app, ImGui.GetContentRegionAvail().X);
+                if (_show == Show.Conflicts && _scan.IsRunning)
+                    ImGui.TextWrapped(TF($"checking: {_scan.Checked:N0} done, {_scan.Pending:N0} left"));
+                ImGui.EndPopup();
+            }
+        }
+        else
+        {
+            var reserve = em * 7;
+            if (SpreadsheetWindow.Has(_type)) reserve += ImGui.CalcTextSize(T("Table")).X + ImGui.GetStyle().FramePadding.X * 2 + ImGui.GetStyle().ItemSpacing.X;
+            if (_type != AllTypes && NewFormDialog.CanCreate(_type)) reserve += ImGui.CalcTextSize(T("+ New")).X + ImGui.GetStyle().FramePadding.X * 2 + ImGui.GetStyle().ItemSpacing.X;
+            DrawRecordScope(em * 9);
+            ImGui.SameLine();
+            DrawPluginFilter(app, Math.Max(em * 8, ImGui.GetContentRegionAvail().X - reserve));
+        }
+        if (SpreadsheetWindow.Has(_type))
+        {
+            ContinueToolbar(right, ImGui.CalcTextSize(T("Table")).X + ImGui.GetStyle().FramePadding.X * 2);
+            if (Studio.Button(T("Table"))) app.Spreadsheets.Show(_type);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("All records of this type as a sortable table, edited in place"));
+        }
+        if (_type != AllTypes && NewFormDialog.CanCreate(_type))
+        {
+            ContinueToolbar(right, ImGui.CalcTextSize(T("+ New")).X + ImGui.GetStyle().FramePadding.X * 2);
+            if (Studio.Button(T("+ New"), primary: true)) app.NewForm.Show(_type);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(TF($"A new {T(RecordTypes.Get(_type).Name)} in the active file (as the CK's New)"));
+        }
+    }
+
+    private void DrawRecordScope(float width)
+    {
+        ImGui.SetNextItemWidth(width);
+        string[] shows = [T("All records"), T("Overridden"), T("Conflicts")];
+        var show = (int)_show;
+        if (ImGui.Combo("##show", ref show, shows, shows.Length)) { _show = (Show)show; _dirty = true; }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(T("Overridden: more than one plugin has the record. Conflicts: some plugin's change is lost to the winner (as xEdit's conflict filter; checked field by field)"));
+    }
+
+    private static void ContinueToolbar(float right, float width)
+    {
+        if (ImGui.GetItemRectMax().X + ImGui.GetStyle().ItemSpacing.X + width <= right)
+            ImGui.SameLine();
+    }
+
+
+    /// <summary>Plugin combo: any, the active file, or one plugin of the load order (with a filter box).</summary>
+    private void DrawPluginFilter(EditorApp app, float width)
+    {
+        ImGui.SetNextItemWidth(width);
         if (!ImGui.BeginCombo("##plugin", _plugin ?? T("Any plugin"), ImGuiComboFlags.HeightLarge))
         {
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Only records that this plugin adds or overrides (xEdit: the plugin's branch)"));
@@ -253,14 +322,20 @@ internal sealed class ObjectWindow : Panel
             foreach (var type in types)
             {
                 var count = catalog.BySignature.TryGetValue(type.Signature, out var list) ? list.Count : 0;
-                if (ImGui.Selectable($"{T(type.Name)}  ##{type.Signature}", _type == type.Signature))
+                var countText = count.ToString("N0");
+                var name = T(type.Name);
+                var start = ImGui.GetCursorScreenPos();
+                var width = ImGui.GetContentRegionAvail().X;
+                if (ImGui.Selectable("##" + type.Signature, _type == type.Signature, ImGuiSelectableFlags.None, new Vector2(0, ImGui.GetTextLineHeight())))
                 {
                     _type = type.Signature;
                     _dirty = true;
                 }
-                ImGui.SameLine();
-                ImGui.TextColored(Theme.TextDim, count.ToString("N0"));
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip(type.Signature);
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip($"{name}\n{type.Signature} · {countText}");
+                var countWidth = ImGui.CalcTextSize(countText).X;
+                var labelWidth = width - countWidth - ImGui.GetStyle().ItemInnerSpacing.X;
+                if (labelWidth > 0) DrawClippedLabel(name, start, labelWidth, Theme.Text);
+                DrawClippedLabel(countText, start + new Vector2(Math.Max(0, width - countWidth), 0), Math.Min(width, countWidth), Theme.TextDim);
             }
 
             ImGui.TreePop();
@@ -319,20 +394,35 @@ internal sealed class ObjectWindow : Panel
     /// <summary>Grid of rendered thumbnails; click selects, drag places into the Render Window.</summary>
     private unsafe void DrawTiles(EditorApp app)
     {
-        var thumbs = app.Thumbnails!;
-        var scale = ImGui.GetFontSize() / 16f;
-        var tile = MathF.Round(118 * scale);
-        var spacing = ImGui.GetStyle().ItemSpacing.X;
-        var labelHeight = ImGui.GetTextLineHeight();
-
         if (!ImGui.BeginChild("##tiles", Vector2.Zero)) { ImGui.EndChild(); return; }
-
-        var avail = ImGui.GetContentRegionAvail().X;
-        var columns = Math.Max(1, (int)((avail + spacing) / (tile + spacing)));
+        var em = ImGui.GetFontSize();
+        var style = ImGui.GetStyle();
+        var padding = style.FramePadding.X;
+        var line = ImGui.GetTextLineHeight();
+        var avail = ImGui.GetContentRegionAvail();
+        // The world workspace is a shallow shelf; put labels beside, rather than below, its images.
+        var horizontal = avail.Y < em * 10 && avail.X > em * 12;
+        var imageSize = horizontal ? Math.Clamp(avail.Y - padding * 2, em * 3, em * 5) : em * 6;
+        var preferredWidth = em * (horizontal ? 17 : 12);
+        var columns = Math.Max(1, (int)((avail.X + style.ItemSpacing.X) / (preferredWidth + style.ItemSpacing.X)));
+        var cardWidth = Math.Max(1, (avail.X - style.ItemSpacing.X * (columns - 1)) / columns);
+        var cardHeight = horizontal ? Math.Max(imageSize, line * 3) + padding * 2 : imageSize + line * 2 + padding * 3;
+        var rowHeight = cardHeight + style.ItemSpacing.Y;
         var rows = (_rows.Count + columns - 1) / columns;
+        var ws = app.Session!.Workspace;
+        var draw = ImGui.GetWindowDrawList();
+
+        var scrollTo = -1;
+        if (_scrolledToSelection != app.SelectionVersion && app.Selected is { } selectedKey)
+        {
+            _scrolledToSelection = app.SelectionVersion;
+            scrollTo = _rows.FindIndex(r => r.FormKey == selectedKey);
+        }
+        if (app.Selected is { } current && !_picked.Contains(current)) _picked.Clear();
 
         var clipper = new ImGuiListClipper();
-        clipper.Begin(rows, tile + labelHeight + ImGui.GetStyle().ItemSpacing.Y * 2);
+        clipper.Begin(rows, rowHeight);
+        if (scrollTo >= 0) clipper.IncludeItemByIndex(scrollTo / columns);
         while (clipper.Step())
         {
             for (var row = clipper.DisplayStart; row < clipper.DisplayEnd; row++)
@@ -342,20 +432,53 @@ internal sealed class ObjectWindow : Panel
                     var i = row * columns + c;
                     if (i >= _rows.Count) break;
                     var record = _rows[i];
+                    var formId = ws.FormIdText(record.FormKey);
                     if (c > 0) ImGui.SameLine();
-
-                    ImGui.BeginGroup();
                     ImGui.PushID(i);
                     var start = ImGui.GetCursorScreenPos();
-                    var texture = thumbs.Get(record.FormKey);
-                    bool clicked;
-                    if (texture != 0)
-                        clicked = ImGui.ImageButton("##t", new ImTextureRef(null, new ImTextureID((ulong)texture)), new Vector2(tile - 4, tile - 4));
-                    else
-                        clicked = ImGui.Button("…##t", new Vector2(tile, tile));
+                    var size = new Vector2(cardWidth, cardHeight);
+                    var selected = app.Selected == record.FormKey || _picked.Contains(record.FormKey);
+                    var removed = app.Document.IsRemoved(record.FormKey);
+                    draw.AddRectFilled(start + new Vector2(0, em / 8), start + size + new Vector2(0, em / 8),
+                        ImGui.GetColorU32(Theme.Shadow), style.FrameRounding);
+                    draw.AddRectFilled(start, start + size, ImGui.GetColorU32(ImGuiCol.Button), style.FrameRounding);
+                    draw.AddLine(start + new Vector2(style.FrameRounding, 1), start + new Vector2(size.X - style.FrameRounding, 1),
+                        ImGui.GetColorU32(Theme.EdgeLight));
+                    if (ImGui.Selectable("##t", selected, ImGuiSelectableFlags.AllowDoubleClick, size))
+                    {
+                        if (Pick(app, i)) app.Select(record.FormKey);
+                        else if (_picked.Count > 0) app.Select(_picked.First());
+                        _scrolledToSelection = app.SelectionVersion;
+                        if (ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left)) app.FormWindows.Open(record.FormKey);
+                    }
+                    if (i == scrollTo) ImGui.SetScrollHereY(0.4f);
+                    if (ImGui.IsItemHovered())
+                        ImGui.SetTooltip($"{record.EditorId}\n{record.Name}\n{formId} · {record.WinningPlugin.Name}"
+                            + (removed ? "\n" + T("Taken out of the active file when you save; Ctrl+Z brings it back") : ""));
 
-                    if (clicked) app.Select(record.FormKey);
-                    if (ImGui.IsItemHovered()) ImGui.SetTooltip($"{record.EditorId}\n{record.Name}\n{app.Session!.Workspace.FormIdText(record.FormKey)} · {record.WinningPlugin.Name}");
+                    var imageStart = start + new Vector2(padding);
+                    var imageExtent = Math.Min(imageSize, cardWidth - padding * 2);
+                    draw.AddRectFilled(imageStart - Vector2.One, imageStart + new Vector2(imageExtent + 1),
+                        ImGui.GetColorU32(ImGuiCol.WindowBg), style.FrameRounding);
+                    var texture = app.Thumbnails!.Get(record.FormKey);
+                    if (texture != 0 && imageExtent > 0)
+                        draw.AddImage(new ImTextureRef(null, new ImTextureID((ulong)texture)), imageStart, imageStart + new Vector2(imageExtent));
+                    else
+                        draw.AddText(imageStart + new Vector2(padding), ImGui.GetColorU32(Theme.TextDim), "…");
+
+                    var textStart = horizontal
+                        ? imageStart + new Vector2(imageExtent + padding, Math.Max(0, (imageSize - line * 3) / 2))
+                        : imageStart + new Vector2(0, imageSize + padding);
+                    var textWidth = Math.Max(1, start.X + cardWidth - padding - textStart.X);
+                    DrawClippedLabel(record.EditorId ?? T("<no editor id>"), textStart, textWidth, removed ? Theme.Error : Theme.Text);
+                    var detail = record.Name is { Length: > 0 } name ? name : horizontal ? record.WinningPlugin.Name : formId;
+                    DrawClippedLabel(detail, textStart + new Vector2(0, line), textWidth, Theme.TextDim);
+                    if (horizontal)
+                        DrawClippedLabel(formId, textStart + new Vector2(0, line * 2), textWidth, Theme.TextDim);
+                    draw.AddRect(start, start + size, ImGui.GetColorU32(selected ? Theme.Accent : style.Colors[(int)ImGuiCol.Border]),
+                        style.FrameRounding, 0, Math.Max(1, em / 16) * (selected ? 2 : 1));
+
+                    DrawRecordContext(app, record);
                     if (ImGui.BeginDragDropSource())
                     {
                         FormDrag.Current = record.FormKey;
@@ -363,21 +486,29 @@ internal sealed class ObjectWindow : Panel
                         ImGui.Text(TF($"Place {record.EditorId}"));
                         ImGui.EndDragDropSource();
                     }
-
-                    if (app.Selected == record.FormKey)
-                        ImGui.GetWindowDrawList().AddRect(start, start + new Vector2(tile, tile), ImGui.GetColorU32(Theme.Accent), 0, 0, 2f);
-
-                    var label = record.EditorId ?? "?";
-                    while (label.Length > 3 && ImGui.CalcTextSize(label).X > tile) label = label[..^2];
-                    if (label != record.EditorId) label += "…";
-                    ImGui.TextColored(app.Selected == record.FormKey ? Theme.Accent : Theme.TextDim, label);
                     ImGui.PopID();
-                    ImGui.EndGroup();
                 }
             }
         }
         clipper.End();
         ImGui.EndChild();
+    }
+
+    /// <summary>Clip long identifiers without repeatedly copying progressively shorter strings.</summary>
+    private static void DrawClippedLabel(string text, Vector2 position, float width, Vector4 color)
+    {
+        var draw = ImGui.GetWindowDrawList();
+        var clipped = ImGui.CalcTextSize(text).X > width;
+        var dots = clipped ? ImGui.CalcTextSize("…").X : 0;
+        draw.PushClipRect(position, position + new Vector2(Math.Max(0, width - dots), ImGui.GetTextLineHeight()), true);
+        draw.AddText(position, ImGui.GetColorU32(color), text);
+        draw.PopClipRect();
+        if (clipped)
+        {
+            draw.PushClipRect(position, position + new Vector2(width, ImGui.GetTextLineHeight()), true);
+            draw.AddText(position + new Vector2(Math.Max(0, width - dots), 0), ImGui.GetColorU32(color), "…");
+            draw.PopClipRect();
+        }
     }
 
     /// <summary>Click: just this record. Ctrl+click: add or drop it. Shift+click: the range from the last click.</summary>
@@ -409,6 +540,62 @@ internal sealed class ObjectWindow : Panel
         return true;
     }
 
+    private void DrawRecordContext(EditorApp app, CatalogRecord record)
+    {
+        if (!ImGui.BeginPopupContextItem("##ctx")) return;
+        var ws = app.Session!.Workspace;
+        if (NewFormDialog.CanCreate(record.Signature) && ImGui.MenuItem(TF($"New {T(RecordTypes.Get(record.Signature).Name)}...")))
+            app.NewForm.Show(record.Signature);
+        var removal = RecordActions.RemovalOf(app, record.FormKey);
+        if (ImGui.MenuItem(RecordActions.Label(app, removal), "Del", false, removal != RecordActions.Removal.None))
+            RecordActions.Remove(app, record.FormKey);
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(RecordActions.Tooltip(app, removal, record.FormKey));
+        ImGui.Separator();
+        if (_picked.Count > 1 && _picked.Contains(record.FormKey))
+        {
+            if (ImGui.MenuItem(TF($"Compare selected ({_picked.Count})"))) app.Compare.OpenRecords(Picked);
+            if (_picked.Count > CompareWindows.MaxColumns && ImGui.IsItemHovered())
+                ImGui.SetTooltip(TF($"The first {CompareWindows.MaxColumns} are compared"));
+        }
+        else if (app.Selected is { } other && other != record.FormKey && ImGui.MenuItem(TF($"Compare with {app.Session!.Catalog.Get(other)?.EditorId ?? ws.FormIdText(other)}")))
+        {
+            app.Compare.OpenRecords([other, record.FormKey]);
+        }
+        if (ImGui.MenuItem(T("Use Info"))) app.UseInfo.Open(record.FormKey);
+        var own = app.ActivePlugin is { IsNew: false } activePlugin && record.FormKey.ModKey.FileName.String.Equals(activePlugin.Name, StringComparison.OrdinalIgnoreCase);
+        if (ImGui.MenuItem(T("Change FormID..."), (string?)null, false, own)) app.Compact.ShowChange(app, record.FormKey);
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(own ? T("Another number for this record of the active file; links inside the file follow (xEdit: Change FormID)") : T("Only the saved active file's own records can be renumbered"));
+        if (_picked.Count > 1 && _picked.Contains(record.FormKey))
+        {
+            var together = Picked;
+            var sameType = together.All(k => app.Session!.Catalog.Get(k)?.Signature == record.Signature);
+            if (ImGui.MenuItem(TF($"Edit together ({together.Count})"), (string?)null, false, sameType)) app.FormWindows.OpenBatch(together);
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                ImGui.SetTooltip(sameType ? T("One form: a field you change is set on every selected record (xEdit: Copy to selected records)") : T("Only records of one type can be edited together"));
+        }
+        var copyKeys = _picked.Count > 1 && _picked.Contains(record.FormKey) ? Picked : [record.FormKey];
+        var copyable = RecordActions.CopyableAsOverride(app, copyKeys).Count;
+        if (ImGui.MenuItem(app.ActivePlugin is { } activeFile ? TF($"Copy as override into {activeFile.Name} ({copyable})") : T("Copy as override into the active file"), (string?)null, false, copyable > 0))
+            RecordActions.CopyAsOverride(app, copyKeys);
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(T("The winning version goes into the active file unchanged (xEdit: Copy as override). Already there, cells, quests and dialogue are skipped."));
+        if (ImGui.MenuItem(TF($"Compare versions ({record.Plugins.Count})"), (string?)null, false, record.Plugins.Count > 1))
+            app.Compare.OpenVersions(record.FormKey);
+        if (record.Signature == "NPC_")
+        {
+            var npcs = copyKeys.Where(k => app.Session!.Catalog.Get(k)?.Signature == "NPC_").ToList();
+            if (ImGui.MenuItem(TF($"Export FaceGen ({npcs.Count})"), "Ctrl+F4")) ExportFaceGen(app, npcs);
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(T("The NPC's head (mesh with its face morphs, hair, eyes…) and tint texture, written next to the active file (CK: Ctrl+F4). Without it the face is dark in game."));
+        }
+        ImGui.Separator();
+        if (ImGui.MenuItem(T("Copy Form ID"))) ImGui.SetClipboardText(ws.FormIdText(record.FormKey));
+        if (ImGui.MenuItem(T("Copy Editor ID"), (string?)null, false, record.EditorId is not null)) ImGui.SetClipboardText(record.EditorId!);
+        if (ImGui.MenuItem(T("Copy FormKey"))) ImGui.SetClipboardText(record.FormKey.ToString());
+        ImGui.EndPopup();
+    }
+
     private unsafe void DrawTable(EditorApp app)
     {
         var ws = app.Session!.Workspace;
@@ -422,7 +609,7 @@ internal sealed class ObjectWindow : Panel
         ImGui.TableSetupColumn(T("Editor ID"), ImGuiTableColumnFlags.WidthStretch | ImGuiTableColumnFlags.DefaultSort, 2.0f);
         ImGui.TableSetupColumn(T("Form ID"), ImGuiTableColumnFlags.WidthFixed, em * 4.6f);
         ImGui.TableSetupColumn(T("Name"), ImGuiTableColumnFlags.WidthStretch, 1.4f);
-        ImGui.TableSetupColumn("Type", ImGuiTableColumnFlags.WidthFixed | (_type == AllTypes ? ImGuiTableColumnFlags.None : ImGuiTableColumnFlags.DefaultHide), em * 2.8f);
+        ImGui.TableSetupColumn(T("Type"), ImGuiTableColumnFlags.WidthFixed | (_type == AllTypes ? ImGuiTableColumnFlags.None : ImGuiTableColumnFlags.DefaultHide), em * 2.8f);
         ImGui.TableSetupColumn(T("Count"), ImGuiTableColumnFlags.WidthFixed, em * 2.4f);
         ImGui.TableSetupColumn(T("Last change"), ImGuiTableColumnFlags.WidthStretch | ImGuiTableColumnFlags.DefaultHide, 1.0f);
         ImGui.TableHeadersRow();
@@ -482,59 +669,7 @@ internal sealed class ObjectWindow : Panel
 
                 if (i == scrollTo) ImGui.SetScrollHereY(0.4f);
 
-                if (ImGui.BeginPopupContextItem("##ctx"))
-                {
-                    if (NewFormDialog.CanCreate(record.Signature) && ImGui.MenuItem(TF($"New {T(RecordTypes.Get(record.Signature).Name)}...")))
-                        app.NewForm.Show(record.Signature);
-                    var removal = RecordActions.RemovalOf(app, record.FormKey);
-                    if (ImGui.MenuItem(RecordActions.Label(app, removal), "Del", false, removal != RecordActions.Removal.None))
-                        RecordActions.Remove(app, record.FormKey);
-                    if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(RecordActions.Tooltip(app, removal, record.FormKey));
-                    ImGui.Separator();
-                    if (_picked.Count > 1 && _picked.Contains(record.FormKey))
-                    {
-                        if (ImGui.MenuItem(TF($"Compare selected ({_picked.Count})"))) app.Compare.OpenRecords(Picked);
-                        if (_picked.Count > CompareWindows.MaxColumns && ImGui.IsItemHovered())
-                            ImGui.SetTooltip(TF($"The first {CompareWindows.MaxColumns} are compared"));
-                    }
-                    else if (app.Selected is { } other && other != record.FormKey && ImGui.MenuItem(TF($"Compare with {app.Session!.Catalog.Get(other)?.EditorId ?? ws.FormIdText(other)}")))
-                    {
-                        app.Compare.OpenRecords([other, record.FormKey]);
-                    }
-                    if (ImGui.MenuItem(T("Use Info"))) app.UseInfo.Open(record.FormKey);
-                    var own = app.ActivePlugin is { IsNew: false } activePlugin && record.FormKey.ModKey.FileName.String.Equals(activePlugin.Name, StringComparison.OrdinalIgnoreCase);
-                    if (ImGui.MenuItem(T("Change FormID..."), (string?)null, false, own)) app.Compact.ShowChange(app, record.FormKey);
-                    if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                        ImGui.SetTooltip(own ? T("Another number for this record of the active file; links inside the file follow (xEdit: Change FormID)") : T("Only the saved active file's own records can be renumbered"));
-                    if (_picked.Count > 1 && _picked.Contains(record.FormKey))
-                    {
-                        var together = Picked;
-                        var sameType = together.All(k => app.Session!.Catalog.Get(k)?.Signature == record.Signature);
-                        if (ImGui.MenuItem(TF($"Edit together ({together.Count})"), (string?)null, false, sameType)) app.FormWindows.OpenBatch(together);
-                        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                            ImGui.SetTooltip(sameType ? T("One form: a field you change is set on every selected record (xEdit: Copy to selected records)") : T("Only records of one type can be edited together"));
-                    }
-                    var copyKeys = _picked.Count > 1 && _picked.Contains(record.FormKey) ? Picked : [record.FormKey];
-                    var copyable = RecordActions.CopyableAsOverride(app, copyKeys).Count;
-                    if (ImGui.MenuItem(app.ActivePlugin is { } activeFile ? TF($"Copy as override into {activeFile.Name} ({copyable})") : T("Copy as override into the active file"), (string?)null, false, copyable > 0))
-                        RecordActions.CopyAsOverride(app, copyKeys);
-                    if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                        ImGui.SetTooltip(T("The winning version goes into the active file unchanged (xEdit: Copy as override). Already there, cells, quests and dialogue are skipped."));
-                    if (ImGui.MenuItem(TF($"Compare versions ({record.Plugins.Count})"), (string?)null, false, record.Plugins.Count > 1))
-                        app.Compare.OpenVersions(record.FormKey);
-                    if (record.Signature == "NPC_")
-                    {
-                        var npcs = copyKeys.Where(k => app.Session!.Catalog.Get(k)?.Signature == "NPC_").ToList();
-                        if (ImGui.MenuItem(TF($"Export FaceGen ({npcs.Count})"), "Ctrl+F4")) ExportFaceGen(app, npcs);
-                        if (ImGui.IsItemHovered())
-                            ImGui.SetTooltip(T("The NPC's head (mesh with its face morphs, hair, eyes…) and tint texture, written next to the active file (CK: Ctrl+F4). Without it the face is dark in game."));
-                    }
-                    ImGui.Separator();
-                    if (ImGui.MenuItem(T("Copy Form ID"))) ImGui.SetClipboardText(ws.FormIdText(record.FormKey));
-                    if (ImGui.MenuItem(T("Copy Editor ID"), (string?)null, false, record.EditorId is not null)) ImGui.SetClipboardText(record.EditorId!);
-                    if (ImGui.MenuItem(T("Copy FormKey"))) ImGui.SetClipboardText(record.FormKey.ToString());
-                    ImGui.EndPopup();
-                }
+                DrawRecordContext(app, record);
 
                 if (ImGui.BeginDragDropSource())
                 {

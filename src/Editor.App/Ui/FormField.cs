@@ -12,15 +12,15 @@ namespace StbEditor.App.Ui;
 /// </summary>
 internal static class FormField
 {
-    private static readonly Dictionary<string, string> Typing = new();
+    private static readonly Dictionary<uint, string> Typing = new();
 
     /// <summary>Field whose suggestion list is open, the highlighted row, and whether the mouse is on the list.</summary>
-    private static string? _suggestFor;
+    private static uint? _suggestFor;
     private static int _highlight;
     private static bool _suggestHovered;
-    private static (string Id, string Query, List<Option> Results)? _cache;
+    private static (uint Id, string Query, List<Option> Results)? _cache;
     private static string _browseFilter = string.Empty;
-    private static string? _activeField;
+    private static uint? _activeField;
 
     /// <summary>A candidate: what to store, what to show.</summary>
     private readonly record struct Option(FormKey Key, string EditorId, string Text);
@@ -42,6 +42,8 @@ internal static class FormField
         var changed = false;
         var session = app.Session!;
         ImGui.PushID(id);
+        // Include the window, record and nested field scopes: two open forms may both contain "Race".
+        var fieldId = ImGui.GetID("##text");
 
         var width = ImGui.GetContentRegionAvail().X;
         var buttonCount = references ? 3 : 2;
@@ -49,37 +51,37 @@ internal static class FormField
         ImGui.SetNextItemWidth(Math.Max(width - buttons, 60));
 
         var shown = value is { } v ? Describe(app, v) : string.Empty;
-        var text = Typing.TryGetValue(id, out var typing) ? typing : shown;
+        var text = Typing.TryGetValue(fieldId, out var typing) ? typing : shown;
         var hint = references ? T("FormID, or + then click in the Render Window") : T("FormID, EditorID or name: type to search");
         // No EnterReturnsTrue: with it the binding hands back the typed text only on Enter, so the
         // search never saw what was being typed. Enter is read from the key, before the field
         // handles it (it ends editing, and ImGui reports that only a frame later).
-        var enter = _activeField == id && (ImGui.IsKeyPressed(ImGuiKey.Enter, false) || ImGui.IsKeyPressed(ImGuiKey.KeypadEnter, false));
+        var enter = _activeField == fieldId && (ImGui.IsKeyPressed(ImGuiKey.Enter, false) || ImGui.IsKeyPressed(ImGuiKey.KeypadEnter, false));
         if (ImGui.InputTextWithHint("##text", hint, ref text, 256, ImGuiInputTextFlags.AutoSelectAll))
         {
-            Typing[id] = text;
+            Typing[fieldId] = text;
             _highlight = 0;
         }
         var inputActive = ImGui.IsItemActive();
         // The arrows choose a suggestion: keep keyboard navigation from moving focus to the next widget.
-        if (inputActive && _suggestFor == id)
+        if (inputActive && _suggestFor == fieldId)
         {
             ImGuiP.SetItemKeyOwner(ImGuiKey.DownArrow, ImGuiInputFlags.None);
             ImGuiP.SetItemKeyOwner(ImGuiKey.UpArrow, ImGuiInputFlags.None);
         }
-        if (inputActive) _activeField = id;
-        else if (_activeField == id) _activeField = null;
+        if (inputActive) _activeField = fieldId;
+        else if (_activeField == fieldId) _activeField = null;
         var fieldMin = ImGui.GetItemRectMin();
         var fieldMax = ImGui.GetItemRectMax();
         LastRects[id] = (fieldMin, fieldMax);
         if (ImGui.IsItemHovered() && value is { } hover && !inputActive) ImGui.SetTooltip($"{hover}");
 
         // Suggestions while typing, and while the mouse is on the list so that a click can land.
-        var query = Typing.TryGetValue(id, out var typed) ? typed.Trim() : string.Empty;
-        if (inputActive && query.Length > 0) _suggestFor = id;
+        var query = Typing.TryGetValue(fieldId, out var typed) ? typed.Trim() : string.Empty;
+        if (inputActive && query.Length > 0) _suggestFor = fieldId;
         // Enter ends editing in the same frame, so it counts as still typing.
-        var suggesting = _suggestFor == id && query.Length > 0 && (inputActive || enter || _suggestHovered);
-        var options = suggesting ? Search(app, id, query, signatures, references) : [];
+        var suggesting = _suggestFor == fieldId && query.Length > 0 && (inputActive || enter || _suggestHovered);
+        var options = suggesting ? Search(app, fieldId, query, signatures, references) : [];
         if (suggesting) LastQuery = $"{query} [{(signatures is null ? "any" : string.Join(",", signatures))}] -> {options.Count}";
 
         if (suggesting && inputActive && options.Count > 0)
@@ -92,13 +94,13 @@ internal static class FormField
         {
             value = options[Math.Clamp(_highlight, 0, options.Count - 1)].Key;
             changed = true;
-            Typing.Remove(id);
+            Typing.Remove(fieldId);
             _suggestFor = null;
         }
-        else if (!inputActive && !(_suggestFor == id && _suggestHovered) && Typing.Remove(id, out var entered))
+        else if (!inputActive && !(_suggestFor == fieldId && _suggestHovered) && Typing.Remove(fieldId, out var entered))
         {
             // Left the field with typed text: an exact FormID / EditorID, else the only match.
-            if (_suggestFor == id) _suggestFor = null;
+            if (_suggestFor == fieldId) _suggestFor = null;
             if (entered.Trim().Length == 0)
             {
                 value = null;
@@ -109,7 +111,7 @@ internal static class FormField
                 value = found;
                 changed = true;
             }
-            else if (Search(app, id, entered.Trim(), signatures, references) is [var only])
+            else if (Search(app, fieldId, entered.Trim(), signatures, references) is [var only])
             {
                 value = only.Key;
                 changed = true;
@@ -120,18 +122,18 @@ internal static class FormField
             }
         }
 
-        if (suggesting && Typing.ContainsKey(id))
+        if (suggesting && Typing.ContainsKey(fieldId))
         {
-            if (DrawSuggestions(id, options, fieldMin, fieldMax) is { } picked)
+            if (DrawSuggestions(fieldId, options, fieldMin, fieldMax) is { } picked)
             {
                 value = picked;
                 changed = true;
-                Typing.Remove(id);
+                Typing.Remove(fieldId);
                 _suggestFor = null;
                 _suggestHovered = false;
             }
         }
-        else if (_suggestFor == id && !inputActive)
+        else if (_suggestFor == fieldId && !inputActive)
         {
             _suggestFor = null;
             _suggestHovered = false;
@@ -157,7 +159,7 @@ internal static class FormField
             ImGui.OpenPopup("##browselist");
         }
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Choose from the list"));
-        if (DrawBrowse(app, id, signatures, references, fieldMin, fieldMax) is { } chosen)
+        if (DrawBrowse(app, signatures, references, fieldMin, fieldMax) is { } chosen)
         {
             value = chosen;
             changed = true;
@@ -191,7 +193,7 @@ internal static class FormField
     }
 
     /// <summary>The list under the field; returns the clicked record.</summary>
-    private static FormKey? DrawSuggestions(string id, List<Option> options, Vector2 fieldMin, Vector2 fieldMax)
+    private static FormKey? DrawSuggestions(uint id, List<Option> options, Vector2 fieldMin, Vector2 fieldMax)
     {
         FormKey? picked = null;
         var rowHeight = ImGui.GetTextLineHeightWithSpacing();
@@ -238,7 +240,7 @@ internal static class FormField
     }
 
     /// <summary>▼ popup: a filter box and every fitting record.</summary>
-    private static FormKey? DrawBrowse(EditorApp app, string id, string[]? signatures, bool references, Vector2 fieldMin, Vector2 fieldMax)
+    private static FormKey? DrawBrowse(EditorApp app, string[]? signatures, bool references, Vector2 fieldMin, Vector2 fieldMax)
     {
         FormKey? chosen = null;
         ImGui.SetNextWindowSize(app.Scaled(560, 460), ImGuiCond.Appearing);
@@ -247,7 +249,7 @@ internal static class FormField
         if (ImGui.IsWindowAppearing()) ImGui.SetKeyboardFocusHere();
         ImGui.SetNextItemWidth(-1);
         ImGui.InputTextWithHint("##filter", T("Filter: EditorID, name or FormID"), ref _browseFilter, 128);
-        var all = Search(app, id + "#browse", _browseFilter.Trim(), signatures, references, limit: 50_000);
+        var all = Search(app, ImGui.GetID("##results"), _browseFilter.Trim(), signatures, references, limit: 50_000);
         ImGui.TextColored(Theme.TextDim, signatures is { Length: > 0 }
             ? TF($"{all.Count:N0} record(s): {string.Join(", ", signatures)}")
             : TF($"{all.Count:N0} record(s)"));
@@ -279,7 +281,7 @@ internal static class FormField
     /// Records (or loaded references) matching every word of <paramref name="query"/> in their
     /// EditorID, name or FormID; EditorIDs starting with the query come first. Empty query: all.
     /// </summary>
-    private static List<Option> Search(EditorApp app, string id, string query, string[]? signatures, bool references, int limit = MaxResults)
+    private static List<Option> Search(EditorApp app, uint id, string query, string[]? signatures, bool references, int limit = MaxResults)
     {
         if (_cache is { } c && c.Id == id && c.Query == query) return c.Results;
         var session = app.Session!;

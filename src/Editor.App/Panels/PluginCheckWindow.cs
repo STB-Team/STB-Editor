@@ -60,7 +60,7 @@ internal sealed class PluginCheckWindow
         Poll();
         if (!_open || app.Session is not { } session) return;
         ImGui.SetNextWindowSize(app.Scaled(900, 600), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Check and clean") + "###plugincheck", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Check and clean") + "###plugincheck", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             _plugin ??= app.ActivePlugin?.Name ?? session.Workspace.Active.LastOrDefault(p => p.IsLoaded)?.Name;
             ImGui.SetNextItemWidth(ImGui.GetFontSize() * 18);

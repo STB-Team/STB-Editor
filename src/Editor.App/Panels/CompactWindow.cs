@@ -40,7 +40,7 @@ internal sealed class CompactWindow
     {
         if (!_open || app.Session is not { } session) return;
         ImGui.SetNextWindowSize(app.Scaled(620, 400), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Compact FormIDs") + "###compact", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Compact FormIDs") + "###compact", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             if (app.ActivePlugin is not { IsNew: false } active || session.Workspace.Active.FirstOrDefault(p => p.Name == active.Name) is not { Mod: { } mod } plugin)
             {

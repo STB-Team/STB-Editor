@@ -13,13 +13,28 @@ internal abstract class Panel
     public abstract string Name { get; }
 
     public bool IsOpen { get; set; } = true;
+    private bool _focus;
+
+    public void OpenAndFocus()
+    {
+        IsOpen = true;
+        _focus = true;
+    }
 
     public void Draw(EditorApp app)
     {
         var open = IsOpen;
         ImGui.SetNextWindowSize(new Vector2(500, 400), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(Title(Name), ref open, WindowFlags))
+        if (_focus)
+        {
+            ImGui.SetNextWindowFocus();
+            _focus = false;
+        }
+        if (Studio.BeginWindow(Title(Name), ref open, WindowFlags))
+        {
+            Studio.PanelEdge();
             DrawContent(app);
+        }
         ImGui.End();
         IsOpen = open;
     }
@@ -59,11 +74,13 @@ internal static class StatusBar
 
     public static void Draw(EditorApp app)
     {
-        var height = ImGui.GetFrameHeight();
+        var height = ImGui.GetFrameHeight() + ImGui.GetFontSize() * 0.25f;
         var flags = ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.MenuBar;
 
         if (ImGuiP.BeginViewportSideBar("##StatusBar", ImGui.GetMainViewport(), ImGuiDir.Down, height, flags))
         {
+            var pos = ImGui.GetWindowPos();
+            ImGui.GetWindowDrawList().AddLine(pos, pos + new Vector2(ImGui.GetWindowWidth(), 0), ImGui.GetColorU32(Theme.EdgeLight));
             if (ImGui.BeginMenuBar())
             {
                 if (app.Loader is { } loader)
@@ -74,13 +91,14 @@ internal static class StatusBar
                 else if (app.Session is { } session)
                 {
                     ImGui.TextColored(Theme.Good, T("Ready"));
-                    ImGui.TextColored(Theme.TextDim,
-                        TF($"{session.Catalog.ByKey.Count:N0} records · {session.Assets.ArchivedCount + session.Assets.LooseCount:N0} assets · loaded in {session.LoadTime.TotalSeconds:0.0} s"));
+                    if (ImGui.IsItemHovered())
+                        ImGui.SetTooltip(app.ActivePlugin is { } active
+                            ? TF($"· Active file: {active.Name}{(active.IsNew ? " (new)" : "")}")
+                            : T("· Active file: none (Ctrl+S asks)"));
+                    if (ImGui.GetWindowWidth() > ImGui.GetFontSize() * 65)
+                        ImGui.TextColored(Theme.TextDim,
+                            TF($"{session.Catalog.ByKey.Count:N0} records · {session.Assets.ArchivedCount + session.Assets.LooseCount:N0} assets · loaded in {session.LoadTime.TotalSeconds:0.0} s"));
                     if (app.Saver.IsBusy) ImGui.TextColored(Theme.Warning, T("· saving…"));
-                    else if (app.ActivePlugin is { } active)
-                        ImGui.TextColored(Theme.Text, TF($"· Active file: {active.Name}{(active.IsNew ? " (new)" : "")}"));
-                    else
-                        ImGui.TextColored(Theme.TextDim, T("· Active file: none (Ctrl+S asks)"));
                     if (app.Document.PendingCount > 0)
                         ImGui.TextColored(Theme.Warning, TF($"· {app.Document.PendingCount} unsaved"));
                 }
@@ -93,14 +111,12 @@ internal static class StatusBar
                 if (_notice is not null && ImGui.GetTime() < _noticeUntil)
                 {
                     var text = _notice.Length > 120 ? _notice[..120] + "…" : _notice;
-                    ImGui.SameLine(ImGui.GetWindowWidth() - ImGui.CalcTextSize(text).X - 24);
-                    ImGui.TextColored(Theme.Good, text);
+                    DrawMessage(text, Theme.Good);
                 }
                 else if (last is not null)
                 {
                     var text = last.Text.Length > 120 ? last.Text[..120] + "…" : last.Text;
-                    ImGui.SameLine(ImGui.GetWindowWidth() - ImGui.CalcTextSize(text).X - 24);
-                    ImGui.TextColored(last.Level == LogLevel.Error ? Theme.Error : Theme.Warning, text);
+                    DrawMessage(text, last.Level == LogLevel.Error ? Theme.Error : Theme.Warning);
                 }
 
                 ImGui.EndMenuBar();
@@ -109,60 +125,146 @@ internal static class StatusBar
         ImGui.End();
     }
 
+    private static void DrawMessage(string text, Vector4 color)
+    {
+        var width = ImGui.CalcTextSize(text).X;
+        var remaining = ImGui.GetContentRegionAvail().X;
+        if (remaining < ImGui.GetFontSize() * 8) return;
+        var shownWidth = Math.Min(width, remaining - ImGui.GetFontSize());
+        ImGui.SameLine(ImGui.GetWindowWidth() - shownWidth - ImGui.GetStyle().WindowPadding.X);
+        var min = ImGui.GetCursorScreenPos();
+        var max = min + new Vector2(shownWidth, ImGui.GetTextLineHeight());
+        var draw = ImGui.GetWindowDrawList();
+        draw.PushClipRect(min, max, true);
+        draw.AddText(min, ImGui.GetColorU32(color), text);
+        draw.PopClipRect();
+        ImGui.Dummy(max - min);
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(text);
+    }
+
     private static string Spinner() => "|/-\\"[(int)(ImGui.GetTime() * 8) % 4].ToString();
 }
 
-/// <summary>
-/// First-run dock layout: render view in the middle, Object Window and Cell View on the left,
-/// Inspector on the right, log and load order at the bottom. Later runs use the saved layout.
-/// </summary>
-internal static class DefaultLayout
-{
-    private static bool _reset;
+internal enum LayoutPreset { World, Records, Classic }
 
-    public static void RequestReset() => _reset = true;
+/// <summary>Explicit panel arrangements. Existing saved layouts are never replaced on startup.</summary>
+internal static unsafe class DefaultLayout
+{
+    private static bool _pending;
+    public static LayoutPreset Preset { get; private set; }
+    public static uint DocumentDockId { get; private set; }
+
+    public static void Initialize(LayoutPreset preset) => Preset = preset;
+
+    public static void Request(LayoutPreset preset)
+    {
+        Preset = preset;
+        _pending = true;
+    }
 
     public static void BuildIfMissing(uint dockId, string iniFile)
     {
-        // Layouts saved before the newest change (language-independent window IDs, 0.4) get the new default once.
-        if (File.Exists(iniFile) && !_reset && File.ReadAllText(iniFile).Contains("###Navmesh]")) return;
+        if (File.Exists(iniFile) && !_pending)
+        {
+            RefreshDocumentDock(dockId);
+            return;
+        }
         Build(dockId);
     }
 
-    public static void ApplyPendingReset(uint dockId)
+    public static bool ApplyPendingReset(uint dockId)
     {
-        if (!_reset) return;
+        if (!_pending)
+        {
+            // Saved docking nodes can become available after the first frame, or change
+            // when a user splits/moves a tab. Do not cache an absent or obsolete node.
+            RefreshDocumentDock(dockId);
+            return false;
+        }
         Build(dockId);
+        return true;
     }
 
-    private static unsafe void Build(uint dockId)
+    private static void RefreshDocumentDock(uint dockId)
     {
-        _reset = false;
+        var center = Preset == LayoutPreset.Records ? ImGuiP.DockBuilderGetCentralNode(dockId) : default;
+        DocumentDockId = center.Handle != null ? center.ID : 0;
+    }
+
+    /// <summary>Native per-window constraints do not resize a saved floating dock host.</summary>
+    public static void EnsureFloatingDocumentSize(Vector2 minimum, Vector2 maximum)
+    {
+        var window = ImGuiP.GetCurrentWindow();
+        var host = window;
+        if (window.DockNode.Handle != null)
+        {
+            var root = ImGuiP.DockNodeGetRootNode(window.DockNode);
+            if (root.Handle == null || ImGuiP.IsDockSpace(root) || root.HostWindow.Handle == null) return;
+            host = root.HostWindow;
+        }
+        var size = Vector2.Clamp(host.Size, minimum, maximum);
+        if (size != host.Size) ImGuiP.SetWindowSize(host, size, ImGuiCond.Always);
         var viewport = ImGui.GetMainViewport();
+        var lastPosition = Vector2.Max(viewport.WorkPos, viewport.WorkPos + viewport.WorkSize - size);
+        var position = Vector2.Clamp(host.Pos, viewport.WorkPos, lastPosition);
+        if (position != host.Pos) ImGuiP.SetWindowPos(host, position, ImGuiCond.Always);
+    }
 
+    private static void Build(uint dockId)
+    {
+        _pending = false;
+        DocumentDockId = 0;
+        var viewport = ImGui.GetMainViewport();
         ImGuiP.DockBuilderRemoveNode(dockId);
         ImGuiP.DockBuilderAddNode(dockId, (ImGuiDockNodeFlags)ImGuiDockNodeFlagsPrivate.Space | ImGuiDockNodeFlags.PassthruCentralNode);
         ImGuiP.DockBuilderSetNodeSize(dockId, viewport.WorkSize);
 
-        uint left = 0, right = 0, bottom = 0, center = dockId, leftBottom = 0;
-        ImGuiP.DockBuilderSplitNode(center, ImGuiDir.Left, 0.36f, &left, &center);
-        ImGuiP.DockBuilderSplitNode(center, ImGuiDir.Right, 0.34f, &right, &center);
-        ImGuiP.DockBuilderSplitNode(center, ImGuiDir.Down, 0.25f, &bottom, &center);
-        ImGuiP.DockBuilderSplitNode(left, ImGuiDir.Down, 0.40f, &leftBottom, &left);
-
-        ImGuiP.DockBuilderDockWindow("###Object Window", left);
-        ImGuiP.DockBuilderDockWindow("###Cell View", leftBottom);
-        uint rightBottom = 0;
-        ImGuiP.DockBuilderSplitNode(right, ImGuiDir.Down, 0.30f, &rightBottom, &right);
-        ImGuiP.DockBuilderDockWindow("###Inspector", right);
-        ImGuiP.DockBuilderDockWindow("###Preview", rightBottom);
-        ImGuiP.DockBuilderDockWindow("###Landscape", rightBottom);
-        ImGuiP.DockBuilderDockWindow("###Navmesh", rightBottom);
-        ImGuiP.DockBuilderDockWindow("###Render Window", center);
-        ImGuiP.DockBuilderDockWindow("###Log", bottom);
-        ImGuiP.DockBuilderDockWindow("###Load Order", bottom);
+        uint left = 0, right = 0, bottom = 0, center = dockId, preview = 0;
+        if (Preset == LayoutPreset.Classic)
+        {
+            ImGuiP.DockBuilderSplitNode(center, ImGuiDir.Left, 0.36f, &left, &center);
+            ImGuiP.DockBuilderSplitNode(center, ImGuiDir.Right, 0.34f, &right, &center);
+            ImGuiP.DockBuilderSplitNode(center, ImGuiDir.Down, 0.25f, &bottom, &center);
+            uint cells = 0;
+            ImGuiP.DockBuilderSplitNode(left, ImGuiDir.Down, 0.40f, &cells, &left);
+            ImGuiP.DockBuilderSplitNode(right, ImGuiDir.Down, 0.30f, &preview, &right);
+            Dock("Object Window", left);
+            Dock("Cell View", cells);
+            Dock("Inspector", right);
+            Dock("Render Window", center);
+        }
+        else if (Preset == LayoutPreset.Records)
+        {
+            ImGuiP.DockBuilderSplitNode(center, ImGuiDir.Left, 0.38f, &left, &center);
+            DocumentDockId = center;
+            preview = center;
+            bottom = left;
+            Dock("Object Window", left);
+            Dock("Cell View", left);
+            Dock("Inspector", center);
+            Dock("Render Window", center);
+        }
+        else
+        {
+            ImGuiP.DockBuilderSplitNode(center, ImGuiDir.Right, 0.23f, &right, &center);
+            var catalogHeight = Math.Clamp(ImGui.GetFontSize() * 12 / viewport.WorkSize.Y, 0.27f, 0.36f);
+            ImGuiP.DockBuilderSplitNode(center, ImGuiDir.Down, catalogHeight, &bottom, &center);
+            ImGuiP.DockBuilderSplitNode(center, ImGuiDir.Left, 0.23f, &left, &center);
+            ImGuiP.DockBuilderSplitNode(right, ImGuiDir.Down, 0.28f, &preview, &right);
+            Dock("Cell View", left);
+            Dock("Object Window", bottom);
+            Dock("Inspector", right);
+            Dock("Render Window", center);
+        }
+        Dock("Preview", preview);
+        Dock("Landscape", preview);
+        Dock("Navmesh", preview);
+        Dock("Log", bottom);
+        Dock("Load Order", bottom);
         ImGuiP.DockBuilderFinish(dockId);
     }
+
+    private static void Dock(string name, uint node) => ImGuiP.DockBuilderDockWindow("###" + name, node);
 }
 
 internal sealed class LogPanel : Panel

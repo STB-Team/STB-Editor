@@ -58,7 +58,7 @@ internal sealed class IdleTreeWindow
         if (!_open || app.Session is not { } session) return;
         if (_builtFor != app.Document.Version || !ReferenceEquals(_builtSession, session)) Rebuild(app);
         ImGui.SetNextWindowSize(app.Scaled(700, 720), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Idle animations") + "###idletree", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Idle animations") + "###idletree", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             ImGui.SetNextItemWidth(ImGui.GetFontSize() * 14);
             ImGui.InputTextWithHint("##idlefilter", T("Filter: idle or event"), ref _filter, 128);

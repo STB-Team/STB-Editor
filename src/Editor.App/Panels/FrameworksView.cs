@@ -282,7 +282,7 @@ internal sealed class FrameworksWindow
     {
         if (!_open || app.Session is not { } session) return;
         ImGui.SetNextWindowSize(app.Scaled(1000, 600), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Framework configs") + "###frameworks", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Framework configs") + "###frameworks", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             var task = session.Frameworks;
             if (!task.IsCompleted) ImGui.TextColored(Theme.Warning, T("reading framework configs…"));

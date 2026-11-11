@@ -25,7 +25,7 @@ internal sealed class ModGroupsWindow
     {
         if (!_open || app.Session is not { } session) return;
         ImGui.SetNextWindowSize(app.Scaled(640, 520), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("ModGroups") + "###modgroups", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("ModGroups") + "###modgroups", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             var groups = app.ModGroupList;
             var loaded = session.Workspace.Active.Select(p => p.Name).ToList();

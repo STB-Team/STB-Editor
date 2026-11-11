@@ -41,7 +41,7 @@ internal sealed class HelpWindow
             ("G", "Snap to the grid (step next to it in the toolbar); Angle: snap rotation"),
             ("F", "Drop to the ground"),
             ("Del", "Delete the selection"),
-            ("K", "With the Claude bridge on (View - Settings): mark the point under the cursor for Claude; notes in View - Claude"),
+            ("K", "With the AI bridge on (View - Settings): mark the point under the cursor for AI; notes in View - AI / MCP"),
             ("1 / Alt+1", "On the selection, in turn: see-through (what is under it shows), hidden, shown again; Alt+1 shows all (only in the view, not saved)"),
             ("Ctrl+D", "Duplicate the selection"),
             ("Ctrl+C / Ctrl+X", "Copy / cut the selected objects (with their properties)"),
@@ -106,7 +106,7 @@ internal sealed class HelpWindow
         if (!_open) return;
 
         ImGui.SetNextWindowSize(app.Scaled(720, 640), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(Title("Keys and features"), ref _open))
+        if (Studio.BeginWindow(Title("Keys and features"), ref _open))
         {
             ImGui.TextColored(Theme.TextDim, T("Controls follow the Creation Kit where it has them."));
             foreach (var (section, rows) in Sections)

@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Collections;
 using System.Reflection;
 using Hexa.NET.ImGui;
@@ -278,7 +279,7 @@ internal static class FormView
 
     private static void DrawMembers(EditorApp app, object owner, IReadOnlyList<PropertyInfo> members, List<object> path, EditTarget? target, int depth)
     {
-        // Plain fields first, as one grid; then the structures and lists in order.
+        // Plain fields share a quiet, padded property plate; structures and lists are separate sections.
         var leaves = new List<(PropertyInfo Member, object? Value)>();
         var composites = new List<(PropertyInfo Member, object? Value)>();
         foreach (var member in members)
@@ -292,30 +293,42 @@ internal static class FormView
             else leaves.Add((member, value));
         }
 
-        if (leaves.Count > 0 && ImGui.BeginTable("##grid", 2, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingStretchProp))
+        if (leaves.Count > 0)
         {
-            ImGui.TableSetupColumn("name", ImGuiTableColumnFlags.WidthStretch, 0.36f);
-            ImGui.TableSetupColumn("value", ImGuiTableColumnFlags.WidthStretch, 0.64f);
-            foreach (var (member, value) in leaves)
+            ImGui.Spacing();
+            ImGui.SeparatorText(T("Properties"));
+            ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(ImGui.GetFontSize() * 0.65f, ImGui.GetFontSize() * 0.25f));
+            ImGui.PushStyleColor(ImGuiCol.TableBorderStrong, Theme.Alpha(Theme.Text, 0.14f));
+            ImGui.PushStyleColor(ImGuiCol.TableBorderLight, Theme.Alpha(Theme.Text, 0.055f));
+            if (ImGui.BeginTable("##grid", 2, ImGuiTableFlags.BordersOuter | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.SizingStretchProp))
             {
-                ImGui.TableNextRow();
-                ImGui.TableNextColumn();
-                ImGui.AlignTextToFramePadding();
-                var header = Header.Contains(member.Name);
-                ImGui.TextColored(header ? Theme.TextDim : Theme.Text, FieldEditors.Label(member.Name));
-                ImGui.TableNextColumn();
-                path.Add(member.Name);
-                var (editable, declared) = RecordFields.Editability(owner, member.Name, value);
-                FieldEditors.Draw(app, target, FieldEditors.Label(member.Name), path, value, declared ?? member.PropertyType, editable);
-                path.RemoveAt(path.Count - 1);
+                ImGui.TableSetupColumn("name", ImGuiTableColumnFlags.WidthStretch, 0.36f);
+                ImGui.TableSetupColumn("value", ImGuiTableColumnFlags.WidthStretch, 0.64f);
+                foreach (var (member, value) in leaves)
+                {
+                    ImGui.TableNextRow();
+                    ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(Theme.Alpha(Theme.Text, 0.035f)));
+                    ImGui.TableNextColumn();
+                    ImGui.AlignTextToFramePadding();
+                    var header = Header.Contains(member.Name);
+                    ImGui.TextColored(header ? Theme.TextDim : Theme.Text, FieldEditors.Label(member.Name));
+                    ImGui.TableNextColumn();
+                    path.Add(member.Name);
+                    var (editable, declared) = RecordFields.Editability(owner, member.Name, value);
+                    FieldEditors.Draw(app, target, FieldEditors.Label(member.Name), path, value, declared ?? member.PropertyType, editable);
+                    path.RemoveAt(path.Count - 1);
+                }
+                ImGui.EndTable();
             }
-            ImGui.EndTable();
+            ImGui.PopStyleColor(2);
+            ImGui.PopStyleVar();
         }
 
         foreach (var (member, value) in composites)
         {
             path.Add(member.Name);
             ImGui.PushID(member.Name);
+            ImGui.Spacing();
             DrawComposite(app, owner, member, value, path, target, depth);
             ImGui.PopID();
             path.RemoveAt(path.Count - 1);
@@ -349,7 +362,12 @@ internal static class FormView
         }
 
         var isEnumerable = value is IEnumerable && !RecordFields.IsGendered(value);
+        ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(ImGui.GetFontSize() * 0.65f, ImGui.GetFontSize() * 0.4f));
+        ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, ImGui.GetFontSize() * 0.25f);
+        ImGui.PushStyleColor(ImGuiCol.Header, Theme.Alpha(Theme.Text, 0.085f));
         var open = ImGui.CollapsingHeader(isEnumerable ? title + Count(value) : title, ImGuiTreeNodeFlags.DefaultOpen);
+        ImGui.PopStyleColor();
+        ImGui.PopStyleVar(2);
         // An optional structure can be removed again.
         if (!isEnumerable && target is not null && Nullable(owner, member))
         {

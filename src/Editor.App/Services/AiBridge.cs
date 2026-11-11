@@ -8,13 +8,12 @@ using System.Text.Json.Nodes;
 namespace StbEditor.App.Services;
 
 /// <summary>
-/// The Claude bridge: an MCP server (Streamable HTTP, JSON responses) on 127.0.0.1 inside the editor, so Claude Code can
-/// look at the Render Window, move the camera, list and edit objects, read and change record fields, search, run Use Info
-/// and leave notes on the view. Off by default (View → Settings → Claude). Requests are answered on the UI thread between
-/// frames; every change is an ordinary undoable step and nothing is saved to disk by Claude — the user saves (Ctrl+S).
-/// Connect: <c>claude mcp add --transport http stb-editor http://127.0.0.1:47110/mcp</c>.
+/// Local MCP server (Streamable HTTP, JSON responses) on 127.0.0.1 for compatible clients.
+/// Structured edits use ordinary undo steps and never save plugins. Optional unrestricted C# scripts require
+/// a separate permission: their filesystem/process side effects are neither sandboxed nor undoable.
+/// Off by default (View → Settings → AI / MCP); queued calls are authorized on the UI thread.
 /// </summary>
-internal sealed class ClaudeBridge : IDisposable
+internal sealed class AiBridge : IDisposable
 {
     public const string Protocol = "2025-03-26";
 
@@ -30,7 +29,7 @@ internal sealed class ClaudeBridge : IDisposable
         ]);
     }
 
-    private sealed record Call(ClaudeTools.Tool Tool, JsonElement Arguments, TaskCompletionSource<ToolResult> Done);
+    private sealed record Call(AiTools.Tool Tool, JsonElement Arguments, TaskCompletionSource<ToolResult> Done);
 
     private readonly ConcurrentQueue<Call> _queue = new();
     private TcpListener? _listener;
@@ -45,14 +44,14 @@ internal sealed class ClaudeBridge : IDisposable
     /// <summary>Work for the UI thread (keeps the editor from idling).</summary>
     public bool HasWork => !_queue.IsEmpty || !UiWork.IsEmpty;
 
-    /// <summary>The last calls (newest first), for the Claude window.</summary>
+    /// <summary>The last calls (newest first), for the AI / MCP window.</summary>
     public List<(DateTime At, string Tool, string Summary, bool Error)> History { get { lock (_historyLock) return [.. _history]; } }
 
     /// <summary>Starts or stops the server to match the settings.</summary>
     public void Apply(Settings settings)
     {
-        if (settings.ClaudeBridge && (_listener is null || Port != settings.ClaudeBridgePort)) Start(settings.ClaudeBridgePort);
-        else if (!settings.ClaudeBridge && _listener is not null) Stop();
+        if (settings.AiBridge && (_listener is null || Port != settings.AiBridgePort)) Start(settings.AiBridgePort);
+        else if (!settings.AiBridge && _listener is not null) Stop();
     }
 
     private void Start(int port)
@@ -67,14 +66,14 @@ internal sealed class ClaudeBridge : IDisposable
             _stop = new CancellationTokenSource();
             var token = _stop.Token;
             Status = $"http://127.0.0.1:{port}/mcp";
-            Log.Info($"claude bridge: listening on {Status}");
+            Log.Info($"AI bridge: listening on {Status}");
             _ = Task.Run(() => AcceptLoop(listener, token));
         }
         catch (Exception e)
         {
             _listener = null;
             Status = $"error: {e.Message}";
-            Log.Warn($"claude bridge: {e.Message}");
+            Log.Warn($"AI bridge: {e.Message}");
         }
     }
 
@@ -217,23 +216,22 @@ internal sealed class ClaudeBridge : IDisposable
         switch (method)
         {
             case "initialize":
-                var asked = message["params"]?["protocolVersion"]?.GetValue<string>();
                 return Result(id, new JsonObject
                 {
-                    ["protocolVersion"] = asked ?? Protocol,
+                    ["protocolVersion"] = Protocol,
                     ["capabilities"] = new JsonObject { ["tools"] = new JsonObject { ["listChanged"] = false } },
-                    ["serverInfo"] = new JsonObject { ["name"] = "stb-editor", ["version"] = typeof(ClaudeBridge).Assembly.GetName().Version?.ToString() ?? "?" },
-                    ["instructions"] = ClaudeTools.Instructions,
+                    ["serverInfo"] = new JsonObject { ["name"] = "stb-editor", ["version"] = typeof(AiBridge).Assembly.GetName().Version?.ToString() ?? "?" },
+                    ["instructions"] = AiTools.Instructions,
                 });
             case "ping":
                 return Result(id, new JsonObject());
             case "tools/list":
                 var tools = new JsonArray();
-                foreach (var tool in ClaudeTools.All) tools.Add(tool.Describe());
+                foreach (var tool in AiTools.All) tools.Add(tool.Describe());
                 return Result(id, new JsonObject { ["tools"] = tools });
             case "tools/call":
                 var name = message["params"]?["name"]?.GetValue<string>() ?? "";
-                var tool2 = ClaudeTools.All.FirstOrDefault(t => t.Name == name);
+                var tool2 = AiTools.All.FirstOrDefault(t => t.Name == name);
                 if (tool2 is null) return Error(id, -32602, $"unknown tool {name}");
                 var arguments = message["params"]?["arguments"] is { } a ? JsonDocument.Parse(a.ToJsonString()).RootElement.Clone() : JsonDocument.Parse("{}").RootElement.Clone();
                 var result = await Run(tool2, arguments, token);
@@ -256,7 +254,7 @@ internal sealed class ClaudeBridge : IDisposable
     }
 
     /// <summary>Queues a call for the UI thread and waits for its answer (two minutes at most).</summary>
-    private async Task<ToolResult> Run(ClaudeTools.Tool tool, JsonElement arguments, CancellationToken token)
+    private async Task<ToolResult> Run(AiTools.Tool tool, JsonElement arguments, CancellationToken token)
     {
         var call = new Call(tool, arguments, new TaskCompletionSource<ToolResult>(TaskCreationOptions.RunContinuationsAsynchronously));
         _queue.Enqueue(call);
@@ -286,9 +284,9 @@ internal sealed class ClaudeBridge : IDisposable
         while (UiWork.TryDequeue(out var work)) work(app);
         while (_queue.TryDequeue(out var call))
         {
-            if (call.Tool.Edits && !app.Settings.ClaudeBridgeEdits)
+            if (PermissionError(app.Settings, call.Tool.Edits, call.Tool.Scripts) is { } denied)
             {
-                call.Done.TrySetResult(ToolResult.Text("changes by Claude are turned off (View → Settings → Claude: «Claude may change things»)", true));
+                call.Done.TrySetResult(ToolResult.Text(denied, true));
                 continue;
             }
             try
@@ -303,6 +301,13 @@ internal sealed class ClaudeBridge : IDisposable
             }
         }
     }
+
+    /// <summary>Checked when a queued call executes, and again before script execution and record commit.</summary>
+    internal static string? PermissionError(Settings settings, bool edits, bool scripts = false) =>
+        !settings.AiBridge ? "the AI / MCP bridge is turned off" :
+        edits && !settings.AiBridgeEdits ? "AI edits are turned off (View → Settings → AI / MCP)" :
+        scripts && !settings.AiBridgeScripts ? "remote C# scripts are turned off: separate explicit permission is required (View → Settings → AI / MCP). C# is unrestricted local code; filesystem/process side effects are not undoable." :
+        null;
 
     private static JsonObject Result(JsonNode id, JsonNode result) => new() { ["jsonrpc"] = "2.0", ["id"] = id, ["result"] = result };
 

@@ -36,7 +36,7 @@ internal sealed class ReferenceWindow
         if (obj.IsDeleted || app.RenderWindow.Scene?.Objects.Contains(obj) != true) { _open = false; return; }
 
         ImGui.SetNextWindowSize(app.Scaled(560, 640), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(WindowName, ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(WindowName, ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             var session = app.Session!;
             ImGui.TextUnformatted($"{obj.BaseEditorId ?? "?"} [{obj.BaseSignature}]");

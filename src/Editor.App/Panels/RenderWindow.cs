@@ -407,13 +407,21 @@ internal sealed partial class RenderWindow : Panel
             if (_reportedFailures.Add(path)) Log.Warn($"asset {path}: {error}");
     }
 
+    /// <summary>Finish worker operations even when a records layout hides the viewport.</summary>
+    public void Update(EditorApp app)
+    {
+        if (app.Session is null || _renderer is null) return;
+        PollLoading(app);
+        PollDoor(app);
+        FinishHavokSim();
+        FinishNavmeshGeneration(app);
+    }
+
     protected override void DrawContent(EditorApp app)
     {
         if (!RequireSession(app) || _renderer is null || _target is null) return;
 
-        PollLoading(app);
-        PollDoor(app);
-        if (_renderer is not null) _renderer.Options.CurrentCell = CentreCell(app);
+        _renderer.Options.CurrentCell = CentreCell(app);
         if (_terrainDirty && _loading is null)
         {
             _terrainDirty = false;
@@ -445,7 +453,7 @@ internal sealed partial class RenderWindow : Panel
         _viewSize = size;
         // ImGuizmo only starts a drag when no ImGui item is hovered (this frame or the last), and the
         // viewport button covers the whole view: while the mouse is on a gizmo handle leave it out.
-        var gizmoHot = _gizmoOver || _gizmoWasUsing;
+        var gizmoHot = _gizmoWasUsing || (_gizmoOver && !ImGui.GetIO().KeyShift);
         if (gizmoHot)
             ImGui.Dummy(size);
         else
@@ -456,8 +464,6 @@ internal sealed partial class RenderWindow : Panel
         var hovered = !_gizmoWasUsing && ImGui.IsItemHovered();
         var active = !gizmoHot && ImGui.IsItemActive();
 
-        FinishHavokSim();
-        FinishNavmeshGeneration(app);
         HandleInput(app, origin, size, hovered, active, delta);
 
         if (IsSettled && !_settledLogged)
@@ -516,7 +522,7 @@ internal sealed partial class RenderWindow : Panel
         DrawDoorQuestion(app);
         DrawOverlay(app, drawList, origin, size);
         DrawMarquee(drawList);
-        DrawClaudeOverlay(drawList, origin, size);
+        DrawAiOverlay(drawList, origin, size);
         DrawProposalBanner(drawList, origin, size, hovered);
         AcceptDrop(app, origin, size);
     }
@@ -536,7 +542,6 @@ internal sealed partial class RenderWindow : Panel
     /// <summary>CK's Show/Hide: kinds of objects, and outdoors the centre cell only.</summary>
     private void DrawShowHide(RenderOptions options)
     {
-        ImGui.SameLine();
         var hidden = options.HiddenGroups.Count + (options.CurrentCellOnly ? 1 : 0) + options.HiddenByHand.Count + options.FadedByHand.Count;
         if (hidden > 0) ImGui.PushStyleColor(ImGuiCol.Button, Theme.ButtonActive);
         if (ImGui.Button((hidden > 0 ? TF($"Show ({hidden} off)") : T("Show")) + "###showhide")) ImGui.OpenPopup("##showhidepopup");
@@ -655,68 +660,173 @@ internal sealed partial class RenderWindow : Panel
         _loading = null;
     }
 
+    private bool _showViewportDiagnostics;
+
     private void DrawToolbar(EditorApp app)
     {
-        var options = _renderer!.Options;
+        var available = ImGui.GetContentRegionAvail();
+        var em = ImGui.GetFontSize();
+        var compact = available.X < em * 40;
+        // Leave room for the scene at high UI scale or in a short dock. Wrapped tool rows
+        // must not consume the viewport and prevent its assets from ever streaming.
+        if (available.X < em * 34 || available.Y < em * 18)
+        {
+            if (Studio.Button(T("Tools") + "###viewporttoolmenu")) ImGui.OpenPopup("##viewporttoolmenu");
+            ImGui.SetNextWindowSize(new Vector2(Math.Min(em * 30, ImGui.GetMainViewport().WorkSize.X * 0.85f), 0), ImGuiCond.Appearing);
+            ImGui.SetNextWindowSizeConstraints(Vector2.Zero, new Vector2(float.MaxValue, ImGui.GetMainViewport().WorkSize.Y * 0.85f));
+            if (ImGui.BeginPopup("##viewporttoolmenu"))
+            {
+                DrawEditToolbar(app, true);
+                if (NavmeshMode) DrawNavmeshToolbar(app);
+                ImGui.EndPopup();
+            }
+            ToolbarNext(T("View"));
+            if (Studio.Button(T("View") + "###viewportviewmenu")) ImGui.OpenPopup("##viewportviewmenu");
+            ImGui.SetNextWindowSize(new Vector2(Math.Min(em * 30, ImGui.GetMainViewport().WorkSize.X * 0.85f), 0), ImGuiCond.Appearing);
+            ImGui.SetNextWindowSizeConstraints(Vector2.Zero, new Vector2(float.MaxValue, ImGui.GetMainViewport().WorkSize.Y * 0.85f));
+            if (ImGui.BeginPopup("##viewportviewmenu"))
+            {
+                DrawViewToolbar(app, true);
+                ImGui.EndPopup();
+            }
+        }
+        else
+        {
+            Studio.Section(T("Object tools"));
+            DrawEditToolbar(app, compact);
+            Studio.Section(T("View"));
+            DrawViewToolbar(app, compact);
+            if (NavmeshMode) DrawNavmeshToolbar(app);
+        }
+        ImGui.Separator();
+    }
 
-        DrawPresets(app);
-        ImGui.SetNextItemWidth(ImGui.GetFontSize() * 7);
+    private void DrawViewToolbar(EditorApp app, bool compact)
+    {
+        var options = _renderer!.Options;
+        var width = Math.Max(1, Math.Min(ImGui.GetFontSize() * 7, ImGui.GetContentRegionAvail().X));
+        ImGui.SetNextItemWidth(width);
         var shading = (int)options.Shading;
         if (ImGui.Combo("##shading", ref shading, T("Lit\0Unlit\0Normals\0Untextured\0"))) options.Shading = (ShadingMode)shading;
-        ImGui.SameLine();
-
-        Toggle(T("Wire"), () => options.Wireframe, v => options.Wireframe = v, T("Wireframe (CK: W)"));
-        Toggle(T("Markers"), () => options.ShowMarkers, v => options.ShowMarkers = v, T("Editor markers, model-less lights, actors (CK: M)"));
-        Toggle(T("Disabled"), () => options.ShowInitiallyDisabled, v => options.ShowInitiallyDisabled = v, T("Initially disabled references (tinted purple)"));
+        ToolbarNext(T("Wire"));
+        options.Wireframe = Toggle(T("Wire"), options.Wireframe, T("Wireframe (CK: W)"));
+        ToolbarNext(T("Markers"));
+        options.ShowMarkers = Toggle(T("Markers"), options.ShowMarkers, T("Editor markers, model-less lights, actors (CK: M)"));
+        var hidden = options.HiddenGroups.Count + (options.CurrentCellOnly ? 1 : 0) + options.HiddenByHand.Count + options.FadedByHand.Count;
+        ToolbarNext(hidden > 0 ? TF($"Show ({hidden} off)") : T("Show"));
         DrawShowHide(options);
-        Toggle(T("Water"), () => options.ShowWater, v => options.ShowWater = v, null);
-        Toggle(T("Land"), () => options.ShowTerrain, v => options.ShowTerrain = v, T("Show the landscape — only shows it; the «Edit land» tool on the row below (H) sculpts and paints it"));
-        Toggle(T("Grass"), () => options.ShowGrass, v => options.ShowGrass = v, T("Grass on the land: the grass types of its landscape textures, placed like the game does (step iMinGrassSize, distance fGrassStartFadeDistance from the INI)"));
-        Toggle(T("Fog"), () => options.Fog, v => options.Fog = v, null);
-        Toggle(T("Collision"), () => options.ShowCollision, v => options.ShowCollision = v, T("Havok collision of the objects near the camera (CK: F4)"));
-        DrawSky(app);
-        Toggle("BOS", () => _showBos, v => _showBos = v, T("Base Object Swapper preview: objects its _SWAP.ini files swap are drawn as the swap (tinted), moved by its properties; the first swap of a random set"));
-        Toggle(T("Borders"), () => options.CellBorders, v => options.CellBorders = v, T("Cell borders (CK: B)"));
-        Toggle(T("Navmesh"), () => options.ShowNavmesh, v => options.ShowNavmesh = v, T("Show navmeshes — only shows them; the «Edit navmesh» tool on the row below (N) edits them and turns this on"));
-        Toggle("FX", () => options.ShowParticles, v => options.ShowParticles = v, T("Particles: fire, smoke, dust, sparks"));
-        Toggle(T("Anim"), () => options.Animate, v => options.Animate = v, T("Play flames, scrolling water and particles (off: frozen frame, idle CPU)"));
-        Toggle("NPC", () => options.HighlightActors, v => options.HighlightActors = app.Settings.HighlightActors = v, T("Tint NPCs and creatures so they are easy to spot in dark places"));
+        ToolbarNext(T("Display"));
+        DrawDisplayOptions(app, options, compact);
+        if (!compact)
+        {
+            ToolbarNext(T("Camera"));
+            DrawCameraOptions(app);
+            ToolbarNext(T("Preset"));
+            DrawPresets(app);
+        }
+    }
 
+    /// <summary>Keep toolbar items outside the scene, wrapping at the current UI scale.</summary>
+    private static void ToolbarNext(string label, float extraWidth = 0)
+    {
+        ImGui.SameLine();
+        var width = ImGui.CalcTextSize(label).X + ImGui.GetStyle().FramePadding.X * 2 + extraWidth;
+        if (ImGui.GetContentRegionAvail().X < width) ImGui.NewLine();
+    }
+
+    private void DrawDisplayOptions(EditorApp app, RenderOptions options, bool compact)
+    {
+        if (Studio.Button(T("Display") + "###viewportdisplay")) ImGui.OpenPopup("##viewportdisplay");
+        ImGui.SetNextWindowSizeConstraints(Vector2.Zero, new Vector2(float.MaxValue, ImGui.GetMainViewport().WorkSize.Y * 0.9f));
+        if (!ImGui.BeginPopup("##viewportdisplay")) return;
+        Studio.Section(T("Environment"));
+        options.ShowWater = ViewOption(T("Water"), options.ShowWater);
+        options.ShowTerrain = ViewOption(T("Land"), options.ShowTerrain, T("Show the landscape — only shows it; the «Edit land» tool on the row below (H) sculpts and paints it"));
+        options.ShowGrass = ViewOption(T("Grass"), options.ShowGrass, T("Grass on the land: the grass types of its landscape textures, placed like the game does (step iMinGrassSize, distance fGrassStartFadeDistance from the INI)"));
+        options.Fog = ViewOption(T("Fog"), options.Fog);
+        ImGui.TextUnformatted(T("Brightness"));
+        ImGui.SetNextItemWidth(ImGui.GetFontSize() * 14);
+        var brightness = options.Brightness;
+        if (ImGui.SliderFloat("##bright", ref brightness, 0.3f, 4f, "%.1f")) options.Brightness = brightness;
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Ambient and directional light multiplier"));
+        DrawSky(app);
+        if (compact)
+        {
+            ImGui.Separator();
+            DrawCameraOptions(app);
+            DrawPresets(app);
+        }
+        ImGui.Separator();
+        Studio.Section(T("Overlays"));
+        options.ShowInitiallyDisabled = ViewOption(T("Disabled"), options.ShowInitiallyDisabled, T("Initially disabled references (tinted purple)"));
+        options.ShowCollision = ViewOption(T("Collision"), options.ShowCollision, T("Havok collision of the objects near the camera (CK: F4)"));
+        options.CellBorders = ViewOption(T("Borders"), options.CellBorders, T("Cell borders (CK: B)"));
+        options.ShowNavmesh = ViewOption(T("Navmesh"), options.ShowNavmesh, T("Show navmeshes — only shows them; the «Edit navmesh» tool on the row below (N) edits them and turns this on"));
+        ImGui.Separator();
+        Studio.Section(T("Actors and effects"));
+        _showBos = ViewOption(T("BOS preview"), _showBos, T("Base Object Swapper preview: objects its _SWAP.ini files swap are drawn as the swap (tinted), moved by its properties; the first swap of a random set"), "BOS");
+        options.ShowParticles = ViewOption(T("Particles"), options.ShowParticles, T("Particles: fire, smoke, dust, sparks"), "FX");
+        options.Animate = ViewOption(T("Animations"), options.Animate, T("Play flames, scrolling water and particles (off: frozen frame, idle CPU)"), T("Anim"));
+        var actors = ViewOption(T("Highlight actors"), options.HighlightActors, T("Tint NPCs and creatures so they are easy to spot in dark places"), "NPC");
+        if (actors != options.HighlightActors) options.HighlightActors = app.Settings.HighlightActors = actors;
+        ImGui.Separator();
+        if (ImGui.CollapsingHeader(T("Diagnostics") + "###viewportdiagnostics"))
+        {
+            ImGui.Checkbox(T("Detailed overlay") + "###viewportdetail", ref _showViewportDiagnostics);
+            DrawViewportDiagnostics();
+        }
+        ImGui.EndPopup();
+    }
+
+    private void DrawCameraOptions(EditorApp app)
+    {
+        if (Studio.Button(T("Camera") + "###viewportcamera")) ImGui.OpenPopup("##viewportcamera");
+        if (!ImGui.BeginPopup("##viewportcamera")) return;
+        ImGui.TextUnformatted(T("Fly speed"));
+        ImGui.SetNextItemWidth(ImGui.GetFontSize() * 14);
+        var speed = _camera.Speed;
+        if (ImGui.DragFloat("##speed", ref speed, 10f, 50f, 20000f, "%.0f")) _camera.Speed = speed;
         if (_world is not null)
         {
-            ImGui.SameLine();
-            ImGui.SetNextItemWidth(ImGui.GetFontSize() * 5);
-            if (ImGui.SliderInt("##radius", ref _gridRadius, 0, 5, "grid ±%d"))
+            ImGui.Separator();
+            ImGui.TextUnformatted(T("Grid radius"));
+            ImGui.SetNextItemWidth(ImGui.GetFontSize() * 14);
+            if (ImGui.SliderInt("##radius", ref _gridRadius, 0, 5, "±%d"))
             {
-                // Applied on the next load; reload now for convenience.
                 if (_cell is { } cell) OpenCell(app, cell);
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Cells loaded around the centre cell"));
         }
-
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(ImGui.GetFontSize() * 6.5f);
-        var brightness = options.Brightness;
-        if (ImGui.SliderFloat("##bright", ref brightness, 0.3f, 4f, "light %.1f")) options.Brightness = brightness;
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Ambient and directional light multiplier"));
-
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(ImGui.GetFontSize() * 6);
-        var speed = _camera.Speed;
-        if (ImGui.DragFloat("##speed", ref speed, 10f, 50f, 20000f, "speed %.0f")) _camera.Speed = speed;
-
-        DrawEditToolbar(app);
-        if (NavmeshMode) DrawNavmeshToolbar(app);
+        ImGui.EndPopup();
     }
 
-    private static void Toggle(string label, Func<bool> get, Action<bool> set, string? tooltip)
+    private void DrawViewportDiagnostics()
     {
-        var value = get();
-        if (value) ImGui.PushStyleColor(ImGuiCol.Button, Theme.ButtonActive);
-        if (ImGui.Button($"{label}###show{label}")) set(!value);
-        if (value) ImGui.PopStyleColor();
+        if (_scene is null) return;
+        var stats = _renderer!.Stats;
+        ImGui.TextUnformatted(TF($"{stats.Visible:N0}/{stats.Objects:N0} objects · {stats.DrawCalls:N0} draws · {stats.Triangles / 1000:N0}k tris · {stats.Lights} lights · {_fps:0} fps"));
+        if (stats.Grass > 0) ImGui.TextUnformatted(TF($"{stats.Grass:N0} grass tufts"));
+        var p = _camera.Position;
+        ImGui.TextUnformatted(TF($"camera {p.X:0} {p.Y:0} {p.Z:0}") + (_scene.IsInterior ? "" : TF($"  cell {(int)MathF.Floor(p.X / 4096)}, {(int)MathF.Floor(p.Y / 4096)}")));
+        if (_selection.Count == 1)
+        {
+            var o = _selection.First();
+            ImGui.TextWrapped(TF($"selected: {o.BaseEditorId ?? "?"} [{o.BaseSignature}] {o.ModelPath ?? ""}"));
+        }
+    }
+
+    private static bool ViewOption(string label, bool value, string? tooltip = null, string? id = null)
+    {
+        ImGui.Checkbox($"{label}###show{id ?? label}", ref value);
         if (tooltip is not null && ImGui.IsItemHovered()) ImGui.SetTooltip(tooltip);
-        ImGui.SameLine();
+        return value;
+    }
+
+    private static bool Toggle(string label, bool value, string? tooltip)
+    {
+        if (Studio.Button($"{label}###show{label}", selected: value)) value = !value;
+        if (tooltip is not null && ImGui.IsItemHovered()) ImGui.SetTooltip(tooltip);
+        return value;
     }
 
     /// <summary>A reference picked in another panel (or by link) selects it here when it is loaded.</summary>
@@ -764,13 +874,19 @@ internal sealed partial class RenderWindow : Panel
         else
         {
             lines.Add($"{_scene.Title}");
-            lines.Add(TF($"{stats.Visible:N0}/{stats.Objects:N0} objects · {stats.DrawCalls:N0} draws · {stats.Triangles / 1000:N0}k tris · {stats.Lights} lights · {_fps:0} fps"));
-            if (stats.Grass > 0) lines.Add(TF($"{stats.Grass:N0} grass tufts"));
+            if (_showViewportDiagnostics)
+            {
+                lines.Add(TF($"{stats.Visible:N0}/{stats.Objects:N0} objects · {stats.DrawCalls:N0} draws · {stats.Triangles / 1000:N0}k tris · {stats.Lights} lights · {_fps:0} fps"));
+                if (stats.Grass > 0) lines.Add(TF($"{stats.Grass:N0} grass tufts"));
+            }
             var pendingMeshes = _renderer.Meshes.Pending;
             var pendingTextures = _renderer.Textures.Pending;
             if (pendingMeshes + pendingTextures > 0) lines.Add(TF($"streaming: {pendingMeshes} meshes, {pendingTextures} textures"));
-            var p = _camera.Position;
-            lines.Add(TF($"camera {p.X:0} {p.Y:0} {p.Z:0}") + (_scene.IsInterior ? "" : TF($"  cell {(int)MathF.Floor(p.X / 4096)}, {(int)MathF.Floor(p.Y / 4096)}")));
+            if (_showViewportDiagnostics)
+            {
+                var p = _camera.Position;
+                lines.Add(TF($"camera {p.X:0} {p.Y:0} {p.Z:0}") + (_scene.IsInterior ? "" : TF($"  cell {(int)MathF.Floor(p.X / 4096)}, {(int)MathF.Floor(p.Y / 4096)}")));
+            }
         }
 
         if (_havok is not null) lines.Add(T("Havok sim…"));
@@ -778,7 +894,8 @@ internal sealed partial class RenderWindow : Panel
         if (_selection.Count == 1)
         {
             var o = _selection.First();
-            lines.Add(TF($"selected: {o.BaseEditorId ?? "?"} [{o.BaseSignature}] {o.ModelPath ?? ""}"));
+            var model = _showViewportDiagnostics ? o.ModelPath ?? "" : "";
+            lines.Add(TF($"selected: {o.BaseEditorId ?? "?"} [{o.BaseSignature}] {model}"));
         }
         else if (_selection.Count > 1)
         {
@@ -794,15 +911,15 @@ internal sealed partial class RenderWindow : Panel
         if (helpSize.X < size.X - 16)
         {
             var hp = new Vector2(origin.X + 8, origin.Y + size.Y - helpSize.Y - 6);
-            drawList.AddText(hp + new Vector2(1, 1), 0xC0000000, help);
-            drawList.AddText(hp, 0xB0D8D2C4, help);
+            drawList.AddText(hp + new Vector2(1, 1), ImGui.GetColorU32(ImGuiCol.WindowBg), help);
+            drawList.AddText(hp, ImGui.GetColorU32(Theme.TextDim), help);
         }
 
         var y = origin.Y + 6;
         foreach (var line in lines)
         {
-            drawList.AddText(new Vector2(origin.X + 9, y + 1), 0xC0000000, line);
-            drawList.AddText(new Vector2(origin.X + 8, y), 0xFFE8E8E8, line);
+            drawList.AddText(new Vector2(origin.X + 9, y + 1), ImGui.GetColorU32(ImGuiCol.WindowBg), line);
+            drawList.AddText(new Vector2(origin.X + 8, y), ImGui.GetColorU32(Theme.Text), line);
             y += ImGui.GetTextLineHeight();
         }
     }

@@ -1,3 +1,4 @@
+using System.Numerics;
 using Hexa.NET.ImGui;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
@@ -9,8 +10,8 @@ using static StbEditor.App.Ui.Loc;
 namespace StbEditor.App.Panels;
 
 /// <summary>
-/// A record as an editable form (the Inspector and the separate form windows): tabs laid out like
-/// the Creation Kit's dialogs (<see cref="FormView"/>), scripts, every field, every plugin's version.
+/// A record as an editable authoring surface (the Inspector and separate form windows):
+/// adaptive section navigation, CK editors, scripts, every field and every plugin's version.
 /// </summary>
 internal sealed class RecordForm
 {
@@ -46,62 +47,82 @@ internal sealed class RecordForm
         var type = catalog is not null ? RecordTypes.Get(catalog.Signature)
             : placedObject is not null ? new RecordTypeInfo(placedObject.Kind == StbEditor.Render.SceneObjectKind.Actor ? "ACHR" : "REFR", "Reference", "") : null;
 
-        ImGui.PushFont(app.Ui.HeaderFont, 0);
-        ImGui.Text(catalog?.EditorId ?? placedObject?.Record?.EditorID ?? (placedObject is not null ? placedObject.BaseEditorId ?? "" : T("(no editor id)")));
-        ImGui.PopFont();
-        ImGui.SameLine();
-        ImGui.TextColored(Theme.TextDim, $"{T(type?.Name ?? "?")} [{type?.Signature}]  {session.Workspace.FormIdText(key)}");
-        if (placedObject is not null)
-        {
-            ImGui.TextColored(Theme.TextDim, TF($"base {placedObject.BaseEditorId} [{placedObject.BaseSignature}]"));
-            ImGui.SameLine();
-            if (ImGui.SmallButton(T("Open base"))) app.Select(placedObject.Base);
-        }
-        if (catalog?.Name is { Length: > 0 } name) ImGui.TextColored(Theme.Accent, name);
-
         var removed = app.Document.IsRemoved(key);
         var editable = !removed && (placedObject is not null || (catalog is not null && !NotFieldEditable.Contains(catalog.Signature)));
-        if (!inWindow && placedObject is null && _versions.Count > 0)
+        var unit = ImGui.GetFontSize();
+        var compactIdentity = ImGui.GetContentRegionAvail().Y < unit * 28;
+        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, unit * 0.4f);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(unit * 0.8f, unit * 0.6f));
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Lerp(ImGui.GetStyle().Colors[(int)ImGuiCol.WindowBg], Theme.Text, 0.035f));
+        ImGui.PushStyleColor(ImGuiCol.Border, Theme.Alpha(Theme.Text, 0.16f));
+        if (ImGui.BeginChild("##recordidentity", Vector2.Zero, ImGuiChildFlags.Borders | ImGuiChildFlags.AutoResizeY | ImGuiChildFlags.AlwaysUseWindowPadding))
         {
-            if (ImGui.SmallButton(T("Open in window"))) app.FormWindows.Open(key);
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("A separate, larger window for this record (as the Creation Kit's form dialogs); double-click in the Object Window does the same"));
-            ImGui.SameLine();
+            ImGui.TextColored(Theme.Accent, $"{type?.Signature ?? "?"}  /  {session.Workspace.FormIdText(key)}");
+            ImGui.PushFont(app.Ui.HeaderFont, 0);
+            var editorId = catalog?.EditorId ?? placedObject?.Record?.EditorID ?? (placedObject is not null ? placedObject.BaseEditorId ?? "" : T("(no editor id)"));
+            if (compactIdentity) ImGui.TextUnformatted(editorId);
+            else ImGui.TextWrapped(editorId);
+            ImGui.PopFont();
+            if (compactIdentity && ImGui.IsItemHovered())
+                ImGui.SetTooltip($"{editorId}\n{catalog?.Name}\n{T(type?.Name ?? "?")} / {(_versions.Count > 0 ? _versions[0].Plugin : "")}\n"
+                    + (placedObject is not null ? TF($"base {placedObject.BaseEditorId} [{placedObject.BaseSignature}]") + "\n" : "")
+                    + (editable ? T("Editable") : T("Read only")));
+            if (!compactIdentity)
+            {
+                if (catalog?.Name is { Length: > 0 } name) ImGui.TextWrapped(name);
+                ImGui.TextWrapped($"{T(type?.Name ?? "?")}{(_versions.Count > 0 ? "  /  " + _versions[0].Plugin : "")}");
+                if (placedObject is not null)
+                    ImGui.TextWrapped(TF($"base {placedObject.BaseEditorId} [{placedObject.BaseSignature}]"));
+            }
+            if (removed) ImGui.TextColored(Theme.Error, T("Removed"));
+            else if (app.Document.Draft(key) is not null || app.Document.IsChanged(key))
+                ImGui.TextColored(Theme.Warning, T("changed, not saved (Ctrl+S)"));
+            else if (!compactIdentity || !editable)
+                ImGui.TextColored(Theme.TextDim, editable ? T("Editable") : T("Read only"));
+
+            if (Studio.Button(T("Record actions") + "###recordactions", new Vector2(-1, 0))) ImGui.OpenPopup("##recordactions");
+            if (ImGui.BeginPopup("##recordactions"))
+            {
+                if (!inWindow && placedObject is null && _versions.Count > 0)
+                {
+                    if (ImGui.MenuItem(T("Open in window"))) app.FormWindows.Open(key);
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("A separate, larger window for this record (as the Creation Kit's form dialogs); double-click in the Object Window does the same"));
+                }
+                if (placedObject is not null && ImGui.MenuItem(T("Open base"))) app.Select(placedObject.Base);
+                if (ImGui.MenuItem(T("Copy FormKey"))) ImGui.SetClipboardText(key.ToString());
+                if (ImGui.MenuItem(T("Use Info"))) app.UseInfo.Open(key);
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Which records use this one and where it is placed in the world (CK: Use Info, xEdit: Referenced By)"));
+                // Framework configs that give, swap or list this record (SPID, KID, BOS…).
+                if (session.Frameworks is { IsCompletedSuccessfully: true } frameworks && frameworks.Result.Of(key) is { Count: > 0 } refs)
+                {
+                    if (ImGui.MenuItem(TF($"Frameworks: {string.Join(", ", refs.Select(r => r.Framework).Distinct())} ({refs.Count})"))) app.UseInfo.Open(key);
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip(string.Join("\n", refs.Take(8).Select(r => $"{r.Framework}: {FrameworksView.RoleText(r)} — {r.Mod}")) + (refs.Count > 8 ? "\n…" : ""));
+                }
+                if (placedObject is null && editable && _versions.Count > 0)
+                {
+                    ImGui.Separator();
+                    if (ImGui.MenuItem(T("Duplicate"))) Duplicate(app, key);
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("New record in the active file: a copy with a new FormID and EditorID (as the CK's Duplicate)"));
+                }
+                if (placedObject is null && !removed && RecordActions.RemovalOf(app, key) is var removal && removal != RecordActions.Removal.None)
+                {
+                    if (ImGui.MenuItem(RecordActions.Label(app, removal))) RecordActions.Remove(app, key);
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip(RecordActions.Tooltip(app, removal, key));
+                }
+                ImGui.EndPopup();
+            }
         }
-        if (ImGui.SmallButton(T("Copy FormKey"))) ImGui.SetClipboardText(key.ToString());
-        ImGui.SameLine();
-        if (ImGui.SmallButton(T("Use Info"))) app.UseInfo.Open(key);
-        // Framework configs that give, swap or list this record (SPID, KID, BOS…): a chip that opens them in Use Info.
-        if (app.Session!.Frameworks is { IsCompletedSuccessfully: true } frameworks && frameworks.Result.Of(key) is { Count: > 0 } refs)
-        {
-            ImGui.SameLine();
-            ImGui.PushStyleColor(ImGuiCol.Text, Theme.Accent);
-            if (ImGui.SmallButton(TF($"Frameworks: {string.Join(", ", refs.Select(r => r.Framework).Distinct())} ({refs.Count})"))) app.UseInfo.Open(key);
-            ImGui.PopStyleColor();
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(string.Join("\n", refs.Take(8).Select(r => $"{r.Framework}: {FrameworksView.RoleText(r)} — {r.Mod}")) + (refs.Count > 8 ? "\n…" : ""));
-        }
-        else _ = app.Session!.Frameworks;
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Which records use this one and where it is placed in the world (CK: Use Info, xEdit: Referenced By)"));
-        if (placedObject is null && editable && _versions.Count > 0)
-        {
-            ImGui.SameLine();
-            if (ImGui.SmallButton(T("Duplicate"))) Duplicate(app, key);
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("New record in the active file: a copy with a new FormID and EditorID (as the CK's Duplicate)"));
-        }
-        if (placedObject is null && !removed && RecordActions.RemovalOf(app, key) is var removal && removal != RecordActions.Removal.None)
-        {
-            ImGui.SameLine();
-            if (ImGui.SmallButton(RecordActions.Label(app, removal))) RecordActions.Remove(app, key);
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(RecordActions.Tooltip(app, removal, key));
-        }
-        if (app.Document.Override(key) is not null)
-        {
-            ImGui.SameLine();
-            ImGui.TextColored(Theme.Warning, T("changed, not saved (Ctrl+S)"));
-        }
+        ImGui.EndChild();
+        var identityMin = ImGui.GetItemRectMin();
+        var identityMax = ImGui.GetItemRectMax();
+        ImGui.GetWindowDrawList().AddLine(identityMin + new Vector2(unit * 0.5f, 1), new Vector2(identityMax.X - unit * 0.5f, identityMin.Y + 1), ImGui.GetColorU32(Theme.Alpha(Theme.Text, 0.2f)));
+        ImGui.PopStyleColor(2);
+        ImGui.PopStyleVar(2);
+        _ = session.Frameworks;
         if (removed)
         {
-            ImGui.TextColored(Theme.Error, TF($"Taken out of {app.ActivePlugin?.Name ?? T("the active file")} when you save (Ctrl+Z brings it back)."));
-            ImGui.TextColored(Theme.TextDim, T("Shown as it is now; editing is off until the removal is undone."));
+            ImGui.TextWrapped(TF($"Taken out of {app.ActivePlugin?.Name ?? T("the active file")} when you save (Ctrl+Z brings it back)."));
+            ImGui.TextWrapped(T("Shown as it is now; editing is off until the removal is undone."));
         }
 
         if (_error is not null)
@@ -146,18 +167,10 @@ internal sealed class RecordForm
         }
 
         Target = target;
-        if (!ImGui.BeginTabBar("##inspector", ImGuiTabBarFlags.FittingPolicyScroll)) return;
         var signature = placedObject is not null ? (placedObject.Kind == StbEditor.Render.SceneObjectKind.Actor ? "ACHR" : "REFR") : catalog!.Signature;
-
-        if (!inWindow && placedObject is not null && app.RenderWindow.IsSelected(placedObject) && Tab(T("Reference")))
-        {
-            Body(() =>
-            {
-                if (app.RenderWindow.SingleSelection == placedObject) DrawPlacement(app, placedObject);
-                ReferenceProperties.Draw(app, placedObject);
-            });
-        }
-
+        _sections.Clear();
+        if (!inWindow && placedObject is not null && app.RenderWindow.IsSelected(placedObject))
+            _sections.Add(new("Reference", T("Reference"), SectionKind.Reference));
         if (placedObject is null)
         {
             if (_tabsFor != (key, current, app.Settings.ShowRecordHeader))
@@ -166,57 +179,101 @@ internal sealed class RecordForm
                 _tabs = FormView.Tabs(current, signature, app.Settings.ShowRecordHeader);
             }
             foreach (var tab in _tabs)
-            {
-                if (!Tab(T(tab.Title) + "###" + tab.Title)) continue;
-                if (!editable) ImGui.TextColored(Theme.TextDim, T("Cells, worldspaces, dialogue and navmesh have their own tools"));
-                if (!editable && catalog?.Signature is "CELL" or "WRLD" && ImGui.SmallButton(T("Properties...") + "##place")) app.PlaceProperties.Open(key);
-                Body(() => FormView.DrawTab(app, current, tab, target));
-            }
-
-            // Which animation replacers (OAR / DAR) would play on this NPC.
-            if (current is Mutagen.Bethesda.Skyrim.INpcGetter animated && Batch is not { Count: > 1 } && Tab(T("Animations") + "###animations"))
-                Body(() => AnimReplacersView.Draw(app, animated));
-
-            if (current is Mutagen.Bethesda.Skyrim.IQuestGetter quest && Batch is not { Count: > 1 } && Tab(T("Dialogue") + "###dialogue"))
-                Body(() => DialogueEditor.Draw(app, quest, editable));
-
-            if (Batch is not { Count: > 1 } && ScriptsEditor.Supports(current) && Tab(TF($"Scripts ({ScriptsEditor.Count(current)})###scripts")))
-            {
-                Body(() => ScriptsEditor.Draw(app, current, (name, change) =>
-                {
-                    if (removed) return; // a removal is undone first, else this edit would replace it
-                    var copy = app.Document.WorkingCopy(key, current);
-                    change(copy);
-                    app.Document.CommitEdit(name, copy, RecordPlace.TopLevel);
-                }));
-            }
+                _sections.Add(new(tab.Title, T(tab.Title), SectionKind.Form, tab));
+            if (current is Mutagen.Bethesda.Skyrim.INpcGetter && Batch is not { Count: > 1 })
+                _sections.Add(new("animations", T("Animations"), SectionKind.Animations));
+            if (current is Mutagen.Bethesda.Skyrim.IQuestGetter && Batch is not { Count: > 1 })
+                _sections.Add(new("dialogue", T("Dialogue"), SectionKind.Dialogue));
+            if (Batch is not { Count: > 1 } && ScriptsEditor.Supports(current))
+                _sections.Add(new("scripts", TF($"Scripts ({ScriptsEditor.Count(current)})"), SectionKind.Scripts));
         }
-
-        if (Tab(T("All fields") + "###allfields"))
+        _sections.Add(new("allfields", T("All fields"), SectionKind.AllFields));
+        _sections.Add(new("versions", TF($"Versions ({_versions.Count})"), SectionKind.Versions));
+        SelectSection();
+        var wide = ImGui.GetContentRegionAvail().X >= unit * 48;
+        if (wide)
         {
-            ImGui.TextColored(Theme.TextDim, T("Every field of the record as Mutagen reads it."));
-            PropertyTree.Draw(app, current, target);
-            ImGui.EndTabItem();
+            var navigationWidth = Math.Clamp(_sections.Max(s => ImGui.CalcTextSize(s.Label).X) + unit * 2, unit * 12, unit * 20);
+            ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Lerp(ImGui.GetStyle().Colors[(int)ImGuiCol.WindowBg], Theme.Text, 0.025f));
+            if (ImGui.BeginChild("##recordnavigation", new Vector2(navigationWidth, 0), ImGuiChildFlags.Borders | ImGuiChildFlags.AlwaysUseWindowPadding))
+                DrawNavigation(closePopup: false);
+            ImGui.EndChild();
+            ImGui.PopStyleColor();
+            ImGui.SameLine();
         }
-
-        if (Tab(TF($"Versions ({_versions.Count})###versions")))
+        else
         {
-            if (placedObject is null)
+            ImGui.TextColored(Theme.TextDim, T("Sections"));
+            if (Studio.Button(_sections.First(s => s.Id == _activeSection).Label + " ...###sectionselector", new Vector2(-1, 0), selected: true))
+                ImGui.OpenPopup("##recordsections");
+            ImGui.SetNextWindowSizeConstraints(new Vector2(Math.Min(ImGui.GetContentRegionAvail().X, unit * 22), 0), new Vector2(float.MaxValue, ImGui.GetMainViewport().WorkSize.Y * 0.75f));
+            if (ImGui.BeginPopup("##recordsections"))
             {
-                if (ImGui.SmallButton(T("Open in a compare window"))) app.Compare.OpenVersions(key);
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Every plugin's version side by side in a separate, larger window (as xEdit)"));
+                DrawNavigation(closePopup: true);
+                ImGui.EndPopup();
             }
-            if (_versionColumnsAt != (key, app.Document.History.Version))
-            {
-                _versionColumnsAt = (key, app.Document.History.Version);
-                _versionColumns = placedObject is null
-                    ? CompareWindows.VersionColumns(app, key)
-                    : _versions.Select(v => new CompareColumn(v.Plugin, v.Plugin, v.Record)).ToList();
-            }
-            Body(() => _compare.Draw(app, _versionColumns, versions: true));
         }
-
-        ImGui.EndTabBar();
+        // Only the selected section is drawn: hidden editors must not run or commit edits.
+        var section = _sections.First(s => s.Id == _activeSection);
+        if (ImGui.BeginChild("##recordsection", Vector2.Zero, ImGuiChildFlags.Borders | ImGuiChildFlags.AlwaysUseWindowPadding))
+        {
+            ImGui.PushFont(app.Ui.HeaderFont, 0);
+            ImGui.TextWrapped(section.Label);
+            ImGui.PopFont();
+            ImGui.Separator();
+            ImGui.PushID(section.Id);
+            switch (section.Kind)
+            {
+                case SectionKind.Reference:
+                    Body(() =>
+                    {
+                        if (app.RenderWindow.SingleSelection == placedObject) DrawPlacement(app, placedObject!);
+                        ReferenceProperties.Draw(app, placedObject!);
+                    });
+                    break;
+                case SectionKind.Form:
+                    if (!editable) ImGui.TextWrapped(T("Cells, worldspaces, dialogue and navmesh have their own tools"));
+                    if (!editable && catalog?.Signature is "CELL" or "WRLD" && ImGui.SmallButton(T("Properties...") + "##place")) app.PlaceProperties.Open(key);
+                    Body(() => FormView.DrawTab(app, current, section.Tab!, target));
+                    break;
+                case SectionKind.Animations:
+                    Body(() => AnimReplacersView.Draw(app, (Mutagen.Bethesda.Skyrim.INpcGetter)current));
+                    break;
+                case SectionKind.Dialogue:
+                    Body(() => DialogueEditor.Draw(app, (Mutagen.Bethesda.Skyrim.IQuestGetter)current, editable));
+                    break;
+                case SectionKind.Scripts:
+                    Body(() => ScriptsEditor.Draw(app, current, (name, change) =>
+                    {
+                        if (removed) return; // a removal is undone first, else this edit would replace it
+                        var copy = app.Document.WorkingCopy(key, current);
+                        change(copy);
+                        app.Document.CommitEdit(name, copy, RecordPlace.TopLevel);
+                    }));
+                    break;
+                case SectionKind.AllFields:
+                    ImGui.TextWrapped(T("Every field of the record as Mutagen reads it."));
+                    PropertyTree.Draw(app, current, target);
+                    break;
+                case SectionKind.Versions:
+                    if (placedObject is null)
+                    {
+                        if (Studio.Button(T("Open in a compare window"))) app.Compare.OpenVersions(key);
+                        if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Every plugin's version side by side in a separate, larger window (as xEdit)"));
+                    }
+                    if (_versionColumnsAt != (key, app.Document.History.Version))
+                    {
+                        _versionColumnsAt = (key, app.Document.History.Version);
+                        _versionColumns = placedObject is null
+                            ? CompareWindows.VersionColumns(app, key)
+                            : _versions.Select(v => new CompareColumn(v.Plugin, v.Plugin, v.Record)).ToList();
+                    }
+                    Body(() => _compare.Draw(app, _versionColumns, versions: true));
+                    break;
+            }
+            ImGui.PopID();
+        }
+        ImGui.EndChild();
     }
 
     private (FormKey, IMajorRecordGetter, bool)? _tabsFor;
@@ -241,22 +298,67 @@ internal sealed class RecordForm
     }
 
     /// <summary>--inspector-tab &lt;id&gt;: open that tab (screenshots); the id is the tab's English title.</summary>
-    private static string? _forceTab = Environment.GetCommandLineArgs().SkipWhile(x => x != "--inspector-tab").Skip(1).FirstOrDefault();
-    private static int _forceFrames = 30;
+    private static readonly string? _forceTab = Environment.GetCommandLineArgs().SkipWhile(x => x != "--inspector-tab").Skip(1).FirstOrDefault();
+    private int _forceFrames = 30;
 
-    private static unsafe bool Tab(string label)
+    private enum SectionKind { Reference, Form, Animations, Dialogue, Scripts, AllFields, Versions }
+    private readonly record struct Section(string Id, string Label, SectionKind Kind, FormTab? Tab = null);
+    private readonly List<Section> _sections = [];
+    private string? _activeSection;
+
+    private void SelectSection()
     {
-        var force = _forceTab is not null && _forceFrames > 0 && label.Contains(_forceTab, StringComparison.OrdinalIgnoreCase);
-        if (force) _forceFrames--;
-        return ImGui.BeginTabItem(label, (bool*)null, force ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None);
+        if (_forceTab is not null && _forceFrames > 0)
+        {
+            // Prefer the exact section ID: "Dialogue" must not select "Dialogue conditions".
+            foreach (var section in _sections)
+            {
+                if (!string.Equals(section.Id, _forceTab, StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(section.Label, _forceTab, StringComparison.OrdinalIgnoreCase)) continue;
+                _activeSection = section.Id;
+                _forceFrames--;
+                return;
+            }
+            foreach (var section in _sections)
+            {
+                if (!section.Id.Contains(_forceTab, StringComparison.OrdinalIgnoreCase)
+                    && !section.Label.Contains(_forceTab, StringComparison.OrdinalIgnoreCase)
+                    && !(section.Kind == SectionKind.AllFields && "All fields".Contains(_forceTab, StringComparison.OrdinalIgnoreCase))) continue;
+                _activeSection = section.Id;
+                _forceFrames--;
+                break;
+            }
+        }
+        if (!_sections.Any(s => s.Id == _activeSection)) _activeSection = _sections[0].Id;
     }
 
-    /// <summary>A tab's content in its own scrolling area; ends the tab item.</summary>
+    private void DrawNavigation(bool closePopup)
+    {
+        var tools = false;
+        ImGui.TextColored(Theme.TextDim, T("Record sections"));
+        foreach (var section in _sections)
+        {
+            if (!tools && section.Kind is SectionKind.Animations or SectionKind.Dialogue or SectionKind.Scripts or SectionKind.AllFields or SectionKind.Versions)
+            {
+                ImGui.Spacing();
+                ImGui.Separator();
+                ImGui.TextColored(Theme.TextDim, T("Tools and history"));
+                tools = true;
+            }
+            if (Studio.Tab(section.Label + "###" + section.Id, section.Id == _activeSection, new Vector2(-1, 0)))
+            {
+                _activeSection = section.Id;
+                if (closePopup) ImGui.CloseCurrentPopup();
+            }
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(section.Label);
+        }
+    }
+
+    /// <summary>A selected section's content in its own scrolling area.</summary>
     private static void Body(Action draw)
     {
-        if (ImGui.BeginChild("##body", System.Numerics.Vector2.Zero)) draw();
+        if (ImGui.BeginChild("##body", Vector2.Zero)) draw();
         ImGui.EndChild();
-        ImGui.EndTabItem();
     }
 
     /// <summary>Fields of the edited record the file would keep differently, recomputed after each edit.</summary>

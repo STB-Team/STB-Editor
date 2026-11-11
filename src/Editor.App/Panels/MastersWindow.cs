@@ -24,7 +24,7 @@ internal sealed class MastersWindow
     {
         if (!_open) return;
         ImGui.SetNextWindowSize(app.Scaled(560, 0), ImGuiCond.Appearing);
-        if (ImGui.Begin(Title("Masters of the active file"), ref _open, ImGuiWindowFlags.NoDocking | ImGuiWindowFlags.AlwaysAutoResize))
+        if (Studio.BeginWindow(Title("Masters of the active file"), ref _open, ImGuiWindowFlags.NoDocking | ImGuiWindowFlags.AlwaysAutoResize))
             DrawContent(app);
         ImGui.End();
     }

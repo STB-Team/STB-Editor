@@ -64,7 +64,7 @@ internal sealed class FilteredDialogueWindow
         }
         if (!_open || app.Session is not { } session) return;
         ImGui.SetNextWindowSize(app.Scaled(900, 560), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Filtered dialogue") + "###filtereddialogue", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Filtered dialogue") + "###filtereddialogue", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             ImGui.SetNextItemWidth(ImGui.GetFontSize() * 14);
             ImGui.InputTextWithHint("##fdnpc", T("NPC: EditorID or FormID"), ref _npc, 128);

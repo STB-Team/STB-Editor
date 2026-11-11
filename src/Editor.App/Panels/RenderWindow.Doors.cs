@@ -29,6 +29,7 @@ internal sealed partial class RenderWindow
 
     private SceneObject? _doorQuestion;
     private bool _doorQuestionOpen;
+    private int _doorQuestionVisibleFrame = -1;
 
     /// <summary>Double-click on a door: ask first (as the Creation Kit), unless turned off in Settings.</summary>
     public void AskGoThroughDoor(EditorApp app, SceneObject door)
@@ -60,6 +61,7 @@ internal sealed partial class RenderWindow
             if (!ImGui.IsPopupOpen(DoorQuestionTitle)) _doorQuestion = null;
             return;
         }
+        _doorQuestionVisibleFrame = ImGui.GetFrameCount();
 
         // Where it leads, when the door index already knows.
         var destination = TeleportOf(app, door)?.Door.FormKey;
@@ -201,7 +203,13 @@ internal sealed partial class RenderWindow
                 _doorTest = 1;
                 return false;
             case 5 when ++_doorTestFrames > 5:
-                Log.Info($"autotest-door: question open: {ImGui.IsPopupOpen(DoorQuestionTitle)}, asks: {DoorQuestionText}");
+                if (_doorQuestionVisibleFrame < ImGui.GetFrameCount() - 1)
+                {
+                    if (_doorTestFrames > 120)
+                        throw new InvalidOperationException("autotest-door: the confirmation dialog was not displayed");
+                    return false;
+                }
+                Log.Info($"autotest-door: question visible: True, asks: {DoorQuestionText}");
                 StbEditor.App.Ui.ImGuiLayer.TestKeys.Enqueue(ImGuiKey.Enter);
                 _doorTest = 6;
                 return false;

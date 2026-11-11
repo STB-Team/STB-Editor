@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace StbEditor.App.Services;
 
 /// <summary>
-/// «Ask Claude» in the Claude window: runs Claude Code (<c>claude -p</c>) with this editor's bridge as its only MCP server
+/// Optional «Ask Claude» in the AI / MCP window: runs Claude Code (<c>claude -p</c>) with this editor's bridge as its only MCP server
 /// and only those tools allowed, streams what it says and which tools it calls, and keeps the conversation
 /// (<c>--resume</c>). Uses the user's own Claude Code install and account.
 /// </summary>
@@ -44,8 +44,7 @@ internal sealed class ClaudeChat
         if (FindCli() is not { } cli) { Error = "Claude Code (claude) is not installed on this computer"; return; }
         Transcript.Add(new Entry("user", text));
         var config = Path.Combine(Path.GetTempPath(), "stbeditor-claude-mcp.json");
-        var url = $"http://127.0.0.1:{app.Settings.ClaudeBridgePort}/mcp";
-        File.WriteAllText(config, JsonSerializer.Serialize(new { mcpServers = new Dictionary<string, object> { ["stb-editor"] = new { type = "http", url } } }));
+        File.WriteAllText(config, Panels.AiWindow.McpConfig(app.Settings.AiBridgePort));
         var prompt = _session is null
             ? "You are working inside STB Editor (a Skyrim Creation Kit replacement) through the stb-editor tools, with the user watching the editor. "
               + "Start with get_status; look with screenshot; for changes the user should check, prefer propose_changes. Answer in the user's language.\n\n" + text

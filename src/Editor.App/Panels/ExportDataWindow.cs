@@ -55,7 +55,7 @@ internal sealed class ExportDataWindow
         }
         if (!_open || app.Session is not { } session) return;
         ImGui.SetNextWindowSize(app.Scaled(560, 360), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Export data") + "###exportdata", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Export data") + "###exportdata", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             ImGui.SetNextItemWidth(-1);
             if (ImGui.BeginCombo("##exportplugin", _plugin.Length > 0 ? _plugin : T("(plugin)")))

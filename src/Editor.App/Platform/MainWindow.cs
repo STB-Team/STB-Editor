@@ -97,7 +97,7 @@ internal sealed unsafe class MainWindow
     /// <summary>The main window (for <see cref="Wake"/>).</summary>
     public static nint Main { get; private set; }
 
-    /// <summary>Ends an idle wait from another thread (a request from the Claude bridge): posts WM_NULL to the main window.</summary>
+    /// <summary>Ends an idle wait from another thread (a request from the AI bridge): posts WM_NULL to the main window.</summary>
     public static void Wake()
     {
         if (Main != 0) PostMessage(Main, 0, 0, 0);

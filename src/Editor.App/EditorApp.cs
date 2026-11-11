@@ -29,6 +29,9 @@ internal sealed class EditorApp : IDisposable
     private bool _layoutBuilt;
     private bool _gizmoReady;
     private bool _pendingCommandLineSelection;
+    private EditTool _lastPanelTool = EditTool.Move;
+    private readonly EditorShellTest _layoutTest = new();
+    private readonly AliasScriptsTest _aliasScriptsTest = new();
 
     public SessionLoader? Loader { get; private set; }
     public EditorSession? Session { get; private set; }
@@ -43,14 +46,14 @@ internal sealed class EditorApp : IDisposable
 
     public bool IsBusy => Loader?.IsRunning == true || RenderWindow.NeedsRedraw || PreviewPanel.NeedsRedraw || Panels.FaceEditor.IsBusy || ObjectWindow.IsScanning || UseInfo.IsBusy
         || Thumbnails?.HasPending == true || Saver.IsBusy || Panels.QuestEditor.IsCompiling || Panels.DialogueEditor.IsCompiling || ScriptSources.IsBusy || PluginCheck.IsBusy || Archive.IsBusy || FindText.IsBusy || VoiceFilesWindow.IsBusy || ScriptsWindow.IsBusy || ExportDataWindow.IsBusy || PluginAssetsWindow.IsBusy || FilteredDialogueWindow.IsBusy
-        || Bridge.HasWork || RenderWindow.HasCaptures || ClaudeWindow.ChatRunning;
+        || Bridge.HasWork || RenderWindow.HasCaptures || AiWindow.ChatRunning;
 
     /// <summary>Cell and worldspace property windows.</summary>
     public Panels.PlacePropertiesWindows PlaceProperties { get; } = new();
 
-    /// <summary>The Claude bridge (local MCP server; off unless the user turns it on) and its window.</summary>
-    public Services.ClaudeBridge Bridge { get; } = new();
-    public Panels.ClaudeWindow ClaudeWindow { get; } = new();
+    /// <summary>The generic local MCP bridge (off by default) and its window.</summary>
+    public Services.AiBridge Bridge { get; } = new();
+    public Panels.AiWindow AiWindow { get; } = new();
 
     /// <summary>Framework config files opened from Use Info / Framework configs.</summary>
     public Panels.ConfigFileWindow ConfigFile { get; } = new();
@@ -137,6 +140,10 @@ internal sealed class EditorApp : IDisposable
         // --ui-scale <factor>: this run only (screenshots).
         var uiScale = Array.IndexOf(cliArgs0, "--ui-scale");
         Theme.SetUiScale(uiScale >= 0 && uiScale + 1 < cliArgs0.Length && float.TryParse(cliArgs0[uiScale + 1], System.Globalization.CultureInfo.InvariantCulture, out var s) ? s : settings.UiScale);
+        DefaultLayout.Initialize(settings.Layout);
+        var layout = Array.IndexOf(cliArgs0, "--layout");
+        if (layout >= 0 && layout + 1 < cliArgs0.Length && Enum.TryParse<LayoutPreset>(cliArgs0[layout + 1], true, out var preset) && Enum.IsDefined(preset))
+            ApplyLayout(preset);
         _openForm = cliArgs0.SkipWhile(x => x != "--open-form").Skip(1).FirstOrDefault();
 
         if (options.Game is not null) settings.GameFolder = options.Game;
@@ -286,6 +293,9 @@ internal sealed class EditorApp : IDisposable
         Hexa.NET.ImGuizmo.ImGuizmo.BeginFrame();
 
         PollLoader();
+        RenderWindow.Update(this);
+        _layoutTest.Step(this);
+        _aliasScriptsTest.Step(this);
         Saver.Poll(this);
         RunAutotest();
         RunNewRecordsAutotest();
@@ -360,6 +370,7 @@ internal sealed class EditorApp : IDisposable
         if (!_primitivesDone && Session is not null && Environment.GetCommandLineArgs().Contains("--autotest-primitives")) _primitivesDone = RenderWindow.PrimitivesTest(this);
 
         DrawMainMenu();
+        EditorShell.Draw(this);
         StatusBar.Draw(this);
 
         var dockId = ImGui.DockSpaceOverViewport(0, ImGui.GetMainViewport(), ImGuiDockNodeFlags.PassthruCentralNode);
@@ -367,6 +378,17 @@ internal sealed class EditorApp : IDisposable
         {
             _layoutBuilt = true;
             DefaultLayout.BuildIfMissing(dockId, AppPaths.ImGuiIni);
+        }
+        if (DefaultLayout.ApplyPendingReset(dockId) && DefaultLayout.Preset == LayoutPreset.Records)
+        {
+            FormWindows.DockAll();
+            Compare.DockAll();
+        }
+        if (RenderWindow.Tool != _lastPanelTool)
+        {
+            _lastPanelTool = RenderWindow.Tool;
+            var panelName = _lastPanelTool switch { EditTool.Land => "Landscape", EditTool.Navmesh => "Navmesh", _ => null };
+            if (panelName is not null) _panels.First(p => p.Name == panelName).OpenAndFocus();
         }
 
         foreach (var panel in _panels)
@@ -389,7 +411,7 @@ internal sealed class EditorApp : IDisposable
         }
         _help.Draw(this);
         _settingsWindow.Draw(this);
-        ClaudeWindow.Draw(this);
+        AiWindow.Draw(this);
         ConfigFile.Draw(this);
         // --reference-window (with --select): open it for the selection, for screenshots.
         if (!_referenceWindowShown && RenderWindow.SingleSelection is { } chosen && Environment.GetCommandLineArgs().Contains("--reference-window"))
@@ -612,7 +634,9 @@ internal sealed class EditorApp : IDisposable
     public Panels.FindTextWindow FindText { get; } = new();
 
     public bool AutotestDone =>
-        (!Environment.GetCommandLineArgs().Contains("--autotest-save") || _autotestStage == 2)
+        _layoutTest.Completed
+        && _aliasScriptsTest.Completed
+        && (!Environment.GetCommandLineArgs().Contains("--autotest-save") || _autotestStage == 2)
         && (!Environment.GetCommandLineArgs().Contains("--autotest-new") || _newTestStage == 4)
         && (!Environment.GetCommandLineArgs().Contains("--autotest-land") || _landTestStage == 3)
         && (!Environment.GetCommandLineArgs().Contains("--autotest-landview") || _landViewStage == 3)
@@ -2481,11 +2505,14 @@ internal sealed class EditorApp : IDisposable
     private SceneObject? _placed;
     private System.Numerics.Vector2 _placeMouse;
     private (System.Numerics.Vector3 Position, float Z) _placeStart;
+    private Vector3 _placeStartRotation;
+    private Task<AiBridge.ToolResult>? _placeApiTask;
+    private string? _placeApiId;
 
     /// <summary>
     /// --autotest-place &lt;dir&gt; [base FormID] (with --cell): a draft active file in &lt;dir&gt;; the base (default
-    /// XMarkerHeading) dropped at the centre of the view as from the Object Window; its model, a click on it, the
-    /// Inspector and a right-drag turn go to the log. Nothing is saved (restore settings.json).
+    /// XMarkerHeading) dropped at the centre of the view as from the Object Window; model, picking, CK drags and gizmos
+    /// are exercised, then the reference is saved/reloaded only in the scratch file (restore settings.json).
     /// </summary>
     private void RunPlaceAutotest()
     {
@@ -2500,10 +2527,37 @@ internal sealed class EditorApp : IDisposable
                 var text = arg + 2 < cli.Length && !cli[arg + 2].StartsWith("--", StringComparison.Ordinal) ? cli[arg + 2] : "00000034";
                 _placed = session.Workspace.ParseFormReference(text) is { } baseKey ? RenderWindow.DropAtCentreForTest(this, baseKey) : null;
                 Log.Info($"autotest-place: dropped {text} -> {_placed?.BaseEditorId} [{_placed?.BaseSignature}] at {_placed?.Position}, ref {_placed?.Reference}, selected {Selected}");
-                _placeStage = _placed is null ? 9 : 1;
+                if (_placed is null) throw new InvalidOperationException("autotest-place: the reference was not created");
+                _placeApiTask = AiTools.All.First(tool => tool.Name == "get_status").Run(this, default);
+                _placeStage = 6;
                 _placeFrames = 0;
                 break;
             }
+            case 6 when _placeApiTask is { IsCompleted: true }:
+            {
+                var result = _placeApiTask.GetAwaiter().GetResult();
+                if (result.IsError) throw new InvalidOperationException("autotest-place: MCP status failed");
+                var text = result.Content[0]?["text"]?.GetValue<string>()
+                    ?? throw new InvalidOperationException("autotest-place: MCP status has no text");
+                var status = System.Text.Json.Nodes.JsonNode.Parse(text);
+                _placeApiId = status?["render"]?["selection"]?[0]?["ref_id"]?.GetValue<string>()
+                    ?? throw new InvalidOperationException("autotest-place: MCP status has no selected draft reference");
+                Select(_placed!.Base);
+                RenderWindow.SelectObjects([]);
+                _placeApiTask = AiTools.All.First(tool => tool.Name == "select").Run(this,
+                    System.Text.Json.JsonSerializer.SerializeToElement(new { ref_ids = new[] { _placeApiId } }));
+                _placeStage = 7;
+                break;
+            }
+            case 7 when _placeApiTask is { IsCompleted: true }:
+                if (_placeApiTask.GetAwaiter().GetResult().IsError
+                    || RenderWindow.SelectedObjects.Count != 1 || Selected != _placed!.Reference)
+                    throw new InvalidOperationException("autotest-place: the MCP draft reference ID cannot select the created reference");
+                Log.Info($"autotest-place: MCP draft id {_placeApiId} selects {_placed.Reference}");
+                _placeApiTask = null;
+                _placeStage = 1;
+                _placeFrames = 0;
+                break;
             case 1 when ++_placeFrames > 60:
             {
                 var o = _placed!;
@@ -2584,12 +2638,20 @@ internal sealed class EditorApp : IDisposable
                 if (RenderWindow.ScreenPointForTest(_placed!) is not { } point) { Log.Error("autotest-place: object not on screen"); _placeStage = 3; break; }
                 _placeMouse = point;
                 _placeStart = (_placed!.Position, _placed.Rotation.Z);
-                StbEditor.App.Ui.ImGuiLayer.TestMouse = (point, true);
-                Log.Info($"autotest-place: left button on the object, tool {RenderWindow.ToolForTest}, camera level with it; a click there picks {RenderWindow.PickOnScreenForTest(_placed)?.BaseEditorId ?? "nothing"}");
-                _placeStage = 14;
+                _placeStartRotation = _placed.Rotation;
+                // Hover first: warping onto a newly enabled Move handle and pressing in the same
+                // frame can leave the viewport owning the click before ImGuizmo sees the handle.
+                StbEditor.App.Ui.ImGuiLayer.TestMouse = (point, false);
+                _placeStage = 16;
                 _placeFrames = 0;
                 break;
             }
+            case 16 when ++_placeFrames > 3:
+                StbEditor.App.Ui.ImGuiLayer.TestMouse = (_placeMouse, true);
+                Log.Info($"autotest-place: left button on the object, tool {RenderWindow.ToolForTest}, camera level with it; a click there picks {RenderWindow.PickOnScreenForTest(_placed!)?.BaseEditorId ?? "nothing"}");
+                _placeStage = 14;
+                _placeFrames = 0;
+                break;
             case 14:
                 if (++_placeFrames <= 24)
                 {
@@ -2603,8 +2665,28 @@ internal sealed class EditorApp : IDisposable
                 _placeFrames = 0;
                 break;
             case 15 when ++_placeFrames > 5:
+            {
                 StbEditor.App.Ui.ImGuiLayer.TestMouse = null;
-                Log.Info($"autotest-place: left-drag in {RenderWindow.ToolForTest}: position {_placeStart.Position} -> {_placed!.Position} ({System.Numerics.Vector3.Distance(_placeStart.Position, _placed.Position):0} units), rotation {_placeStart.Z * 180 / MathF.PI:0.#} -> {_placed.Rotation.Z * 180 / MathF.PI:0.#} deg, undo '{Document.History.UndoName}'");
+                var distance = System.Numerics.Vector3.Distance(_placeStart.Position, _placed!.Position);
+                var turn = new Vector3(
+                    MathF.IEEERemainder(_placed.Rotation.X - _placeStartRotation.X, MathF.Tau),
+                    MathF.IEEERemainder(_placed.Rotation.Y - _placeStartRotation.Y, MathF.Tau),
+                    MathF.IEEERemainder(_placed.Rotation.Z - _placeStartRotation.Z, MathF.Tau)).Length();
+                Log.Info($"autotest-place: left-drag in {RenderWindow.ToolForTest}: position {_placeStart.Position} -> {_placed.Position} ({distance:0} units), rotation {_placeStartRotation * (180 / MathF.PI)} -> {_placed.Rotation * (180 / MathF.PI)} deg, undo '{Document.History.UndoName}'");
+                if (RenderWindow.ToolForTest == EditTool.Rotate)
+                {
+                    if (distance > 0.05f || turn < MathF.PI / 180f)
+                        throw new InvalidOperationException("autotest-place: Rotate must turn the reference without moving its position");
+                }
+                else
+                {
+                    var camera = RenderWindow.ViewCamera;
+                    var cursorTravel = 2f * MathF.Tan(camera.FieldOfView / 2f)
+                        * System.Numerics.Vector3.Distance(camera.Position, _placeStart.Position)
+                        * MathF.Sqrt(48f * 48f + 12f * 12f) / RenderWindow.ViewSize.Y;
+                    if (distance < 1f || distance > cursorTravel * 4f + 1f || turn > 0.001f)
+                        throw new InvalidOperationException("autotest-place: Move must move near the cursor without turning the reference");
+                }
                 // The same drag with the Move tool: the object moves, but stays near the cursor.
                 if (RenderWindow.ToolForTest == EditTool.Rotate)
                 {
@@ -2615,6 +2697,7 @@ internal sealed class EditorApp : IDisposable
                 else _placeStage = 3;
                 _placeFrames = 0;
                 break;
+            }
             case 3 when ++_placeFrames > 20:
             {
                 // A field of the new reference set in the Inspector's All fields, then saved with its placement.
@@ -3171,44 +3254,77 @@ internal sealed class EditorApp : IDisposable
     }
 
     private int _saveCheckStage;
+    private (string Source, string Copy, string Master, byte[] Hash)? _saveCheckFiles;
 
     /// <summary>
     /// --autotest-savecheck &lt;folder&gt; &lt;plugin&gt;: on a copy of the plugin in the folder, override a record of
-    /// a plugin that is not its master and save: the save check (new master, records written differently)
-    /// stays open for a screenshot. Nothing is written.
+    /// a plugin that is not its master and prepare a save: confirmation of the new master stays
+    /// open for a screenshot. Both source and copy must remain unchanged.
     /// </summary>
     private void RunSaveCheckAutotest()
     {
         var cli = Environment.GetCommandLineArgs();
         var i = Array.IndexOf(cli, "--autotest-savecheck");
-        if (i < 0 || i + 2 >= cli.Length || Session is not { } session || _saveCheckStage == 2) return;
+        if (i < 0 || _saveCheckStage == 2) return;
+        if (i + 2 >= cli.Length)
+            throw new InvalidOperationException("autotest-savecheck: expected a scratch folder and a loaded plugin name");
         if (_saveCheckStage == 1)
         {
-            if (Saver.AwaitingConfirmation is not { } pending) return;
-            Log.Info($"autotest-savecheck: added masters [{string.Join(", ", pending.AddedMasters)}], {pending.LossyRecords.Count} record(s) written differently: {string.Join("; ", pending.LossyRecords)}");
+            if (Saver.LastError is { } error)
+                throw new InvalidOperationException($"autotest-savecheck: save preparation failed: {error}");
+            if (Saver.AwaitingConfirmation is not { } pending)
+            {
+                if (!Saver.IsBusy)
+                    throw new InvalidOperationException("autotest-savecheck: save ended without the required new-master confirmation");
+                return;
+            }
+            var files = _saveCheckFiles ?? throw new InvalidOperationException("autotest-savecheck: missing source file state");
+            if (!pending.TargetPath.Equals(files.Copy, StringComparison.OrdinalIgnoreCase)
+                || !pending.AddedMasters.Contains(files.Master, StringComparer.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"autotest-savecheck: expected confirmation of master {files.Master} for {files.Copy}");
+            if (!FileHash(files.Source).AsSpan().SequenceEqual(files.Hash)
+                || !FileHash(files.Copy).AsSpan().SequenceEqual(files.Hash))
+                throw new InvalidOperationException("autotest-savecheck: a plugin changed before save confirmation");
+            Log.Info($"autotest-savecheck: added masters [{string.Join(", ", pending.AddedMasters)}], {pending.LossyRecords.Count} record(s) written differently: {string.Join("; ", pending.LossyRecords)}; source and copy unchanged, confirmation left open");
             _saveCheckStage = 2;
             return;
         }
+        if (Session is not { } session || Loader is not null) return;
 
-        var plugin = session.Workspace.Active.First(p => p.Name.Equals(cli[i + 2], StringComparison.OrdinalIgnoreCase));
+        var plugin = session.Workspace.Active.FirstOrDefault(p => p.Name.Equals(cli[i + 2], StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException($"autotest-savecheck: plugin {cli[i + 2]} is not loaded");
+        var source = Path.GetFullPath(plugin.Location.Path);
+        var copy = Path.GetFullPath(Path.Combine(cli[i + 1], plugin.Name));
+        if (source.Equals(copy, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("autotest-savecheck: the scratch copy must not be the loaded source plugin");
+        var masters = StbEditor.Data.Raw.PluginHeader.Read(source).Masters.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var order = session.Workspace.Active.Select(p => p.ModKey).ToList();
+        var self = order.IndexOf(plugin.ModKey);
+        var target = session.Catalog.BySignature.TryGetValue("MISC", out var records)
+            ? records.FirstOrDefault(r => !masters.Contains(r.FormKey.ModKey.FileName.String)
+                && order.IndexOf(r.FormKey.ModKey) is var at && at >= 0 && at < self)
+            : null;
+        if (target is null)
+            throw new InvalidOperationException($"autotest-savecheck: no MISC from an earlier non-master plugin is available for {plugin.Name}");
+        var winning = new StbEditor.Data.RecordLookup(session.Workspace, session.Catalog).Resolve<Mutagen.Bethesda.Skyrim.IMiscItemGetter>(target.FormKey)
+            ?? throw new InvalidOperationException($"autotest-savecheck: could not resolve MISC {target.FormKey}");
+
+        _saveCheckFiles = (source, copy, target.FormKey.ModKey.FileName.String, FileHash(source));
         Directory.CreateDirectory(cli[i + 1]);
-        var copy = Path.Combine(cli[i + 1], plugin.Name);
-        File.Copy(plugin.Location.Path, copy, overwrite: true);
+        File.Copy(source, copy, overwrite: true);
         SetActivePlugin(StbEditor.Core.ActivePlugin.ForExisting(plugin, session.Game).RetargetedTo(copy));
-
-        var masters = StbEditor.Data.Raw.PluginHeader.Read(copy).Masters.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var order = session.Workspace.Active.Select(p => p.Name.ToLowerInvariant()).ToList();
-        var self = order.IndexOf(plugin.Name.ToLowerInvariant());
-        var target = session.Catalog.BySignature["MISC"].FirstOrDefault(r => r.FormKey.ModKey.FileName.String is var origin
-            && !masters.Contains(origin) && order.IndexOf(origin.ToLowerInvariant()) is var at && at >= 0 && at < self);
-        if (target is null) { Log.Warn("autotest-savecheck: no record outside the masters"); _saveCheckStage = 2; return; }
-        var winning = new StbEditor.Data.RecordLookup(session.Workspace, session.Catalog).Resolve<Mutagen.Bethesda.Skyrim.IMiscItemGetter>(target.FormKey)!;
         var edited = StbEditor.Core.OverrideEditing.WorkingCopy(Document, target.FormKey, winning);
         edited.EditorID += "Edited";
         StbEditor.Core.OverrideEditing.CommitEdit(Document, "edit", edited, StbEditor.Core.RecordPlace.TopLevel);
-        Log.Info($"autotest-savecheck: edited {target.EditorId} from {target.FormKey.ModKey}, saving into a copy of {plugin.Name}");
-        Save();
+        Log.Info($"autotest-savecheck: edited {target.EditorId} from {target.FormKey.ModKey}, preparing a save into a copy of {plugin.Name}");
         _saveCheckStage = 1;
+        Save();
+
+        static byte[] FileHash(string path)
+        {
+            using var file = File.OpenRead(path);
+            return System.Security.Cryptography.SHA256.HashData(file);
+        }
     }
 
     private int _compareStage;
@@ -3875,7 +3991,7 @@ internal sealed class EditorApp : IDisposable
             }
             ImGui.Separator();
             if (ImGui.MenuItem(T("Settings..."))) _settingsWindow.Show();
-            if (ImGui.MenuItem(T("Claude..."))) ClaudeWindow.Show();
+            if (ImGui.MenuItem(T("AI / MCP..."))) AiWindow.Show();
             if (ImGui.MenuItem(T("Spreadsheets..."), (string?)null, false, Session is not null)) Spreadsheets.Show();
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Weapons, armor, ammunition and other items as sortable tables, edited in place (as xEdit's spreadsheets)"));
             if (ImGui.BeginMenu(T("Frame limit")))
@@ -3893,7 +4009,14 @@ internal sealed class EditorApp : IDisposable
                 ImGui.EndMenu();
             }
             ImGui.Separator();
-            if (ImGui.MenuItem(T("Reset layout"))) DefaultLayout.RequestReset();
+            if (ImGui.BeginMenu(T("Panel layout")))
+            {
+                if (ImGui.MenuItem(T("World layout"))) ApplyLayout(LayoutPreset.World);
+                if (ImGui.MenuItem(T("Records layout"))) ApplyLayout(LayoutPreset.Records);
+                if (ImGui.MenuItem(T("Classic layout"))) ApplyLayout(LayoutPreset.Classic);
+                ImGui.EndMenu();
+            }
+            if (ImGui.MenuItem(T("Reset layout"))) ApplyLayout(LayoutPreset.World);
             ImGui.EndMenu();
         }
 
@@ -3953,6 +4076,17 @@ internal sealed class EditorApp : IDisposable
     {
         _settings.Language = language;
         Loc.Russian = language == "ru";
+    }
+
+    /// <summary>Changes only panel visibility and docking, never the loaded scene, selection or edits.</summary>
+    public void ApplyLayout(LayoutPreset preset)
+    {
+        _settings.Layout = preset;
+        DefaultLayout.Request(preset);
+        ObjectWindow.IsOpen = Inspector.IsOpen = PreviewPanel.IsOpen = true;
+        RenderWindow.IsOpen = preset != LayoutPreset.Records;
+        foreach (var panel in _panels)
+            if (panel is CellViewPanel) panel.IsOpen = preset != LayoutPreset.Records;
     }
 
     public Vector2 Scaled(float x, float y) => new Vector2(x, y) * (ImGui.GetFontSize() / 16f);

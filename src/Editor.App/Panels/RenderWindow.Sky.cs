@@ -77,11 +77,8 @@ internal sealed partial class RenderWindow
     {
         if (_world is null || app.Session is not { } session) return;
         var label = _weather is { } k ? $"{session.Catalog.Get(k)?.EditorId ?? "?"} {_hour:0.#}h" : T("Sky");
-        if (_weather is not null) ImGui.PushStyleColor(ImGuiCol.Button, Theme.ButtonActive);
-        if (ImGui.Button(label + "###sky")) ImGui.OpenPopup("##skypopup");
-        if (_weather is not null) ImGui.PopStyleColor();
+        if (Studio.Button(label + "###sky", selected: _weather is not null)) ImGui.OpenPopup("##skypopup");
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Light the view as a weather at an hour of the day (CK: sky / time of day)"));
-        ImGui.SameLine();
         if (!ImGui.BeginPopup("##skypopup")) return;
         ImGui.SetNextItemWidth(ImGui.GetFontSize() * 16);
         var hour = _hour;

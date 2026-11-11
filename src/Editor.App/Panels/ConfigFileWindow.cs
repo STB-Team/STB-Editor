@@ -38,7 +38,7 @@ internal sealed class ConfigFileWindow
     {
         if (!_open) return;
         ImGui.SetNextWindowSize(app.Scaled(820, 560), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Config file") + "###configfile", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Config file") + "###configfile", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             ImGui.TextUnformatted(_path);
             ImGui.TextColored(Theme.TextDim, TF($"{_where} · line {_line}"));

@@ -7,8 +7,8 @@ using static StbEditor.App.Ui.Loc;
 namespace StbEditor.App.Panels;
 
 /// <summary>
-/// Changes Claude proposes instead of making: the objects show where they would go (tinted), and the user applies them as
-/// one undoable step or rejects them (Claude window, or Enter / Backspace over the view). One proposal at a time; a new one
+/// Changes an AI client proposes instead of making: objects show where they would go (tinted), and the user applies them as
+/// one undoable step or rejects them (AI / MCP window, or Enter / Backspace over the view). One proposal at a time; a new one
 /// replaces the pending one.
 /// </summary>
 internal sealed partial class RenderWindow
@@ -51,7 +51,7 @@ internal sealed partial class RenderWindow
         if (!alive) p.Status = "lost: the cell was reloaded";
         else if (apply)
         {
-            Commit($"Claude: {p.Title}", p.Changes.ToDictionary(c => c.Object, c => c.Before));
+            Commit($"AI: {p.Title}", p.Changes.ToDictionary(c => c.Object, c => c.Before));
             p.Status = "applied";
         }
         else
@@ -69,7 +69,7 @@ internal sealed partial class RenderWindow
     {
         if (PendingProposal is not { } p) return;
         if (_scene is null || !p.Changes.All(c => _scene.Objects.Contains(c.Object))) { Decide(false); return; }
-        var text = TF($"Claude proposes: {p.Title} ({p.Changes.Count} object(s), shown tinted) — Enter applies, Backspace rejects (or the Claude window)");
+        var text = TF($"AI proposes: {p.Title} ({p.Changes.Count} object(s), shown tinted) — Enter applies, Backspace rejects (or the AI / MCP window)");
         var textSize = ImGui.CalcTextSize(text);
         var at = origin + new System.Numerics.Vector2((size.X - textSize.X) / 2, size.Y - textSize.Y - 14);
         draw.AddRectFilled(at - new System.Numerics.Vector2(10, 6), at + textSize + new System.Numerics.Vector2(10, 6), 0xE0000000u, 4);

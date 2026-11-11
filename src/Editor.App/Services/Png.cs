@@ -2,7 +2,7 @@ using System.IO.Compression;
 
 namespace StbEditor.App.Services;
 
-/// <summary>A minimal PNG writer (8-bit RGBA, no filtering) for pictures sent to Claude.</summary>
+/// <summary>A minimal PNG writer (8-bit RGBA, no filtering) for MCP viewport pictures.</summary>
 internal static class Png
 {
     private static readonly uint[] Crc = MakeCrc();

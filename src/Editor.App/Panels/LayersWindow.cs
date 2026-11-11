@@ -101,7 +101,7 @@ internal sealed class LayersWindow
         var window = app.RenderWindow;
         var selected = window.SelectedObjects.Select(o => o.Reference).ToList();
         ImGui.SetNextWindowSize(app.Scaled(520, 420), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Layers") + "###layers", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Layers") + "###layers", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             ImGui.TextColored(Theme.TextDim, T("Groups of references to hide or freeze while you work; kept by the editor, not in the plugin."));
             ImGui.SetNextItemWidth(ImGui.GetFontSize() * 14);

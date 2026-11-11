@@ -28,7 +28,8 @@ internal static class Program
         catch (Exception ex)
         {
             var report = CrashReport.Write(ex);
-            Win32.MessageBox(0, $"{ex.Message}\n\nReport: {report}", "STB Editor", 0x10);
+            if (!args.Contains("--screenshot", StringComparer.OrdinalIgnoreCase))
+                Win32.MessageBox(0, $"{ex.Message}\n\nReport: {report}", "STB Editor", 0x10);
             return 1;
         }
     }
@@ -90,7 +91,7 @@ internal static class Program
             editor.RenderScene();
             imgui.Render();
 
-            // Claude bridge pictures with the overlay: cut from the finished frame.
+            // AI bridge pictures with the overlay: cut from the finished frame.
             editor.RenderWindow.ServeWindowShots(graphics.ReadBackBuffer, graphics.Width, graphics.Height);
 
             // An autotest's extra frame (before / after pictures), taken without stopping.

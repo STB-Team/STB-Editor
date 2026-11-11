@@ -13,6 +13,12 @@ Console.OutputEncoding = System.Text.Encoding.UTF8;
 var command = args.Length > 0 ? args[0] : "plugins";
 var gameFolder = args.Length > 1 ? args[1] : GameInstall.FindInstalledGame() ?? @"C:\Skyrim";
 
+if (command == "collisiontest")
+{
+    CollisionTests.Run();
+    return;
+}
+
 if (command == "mathtest")
 {
     var rng = new Random(1);

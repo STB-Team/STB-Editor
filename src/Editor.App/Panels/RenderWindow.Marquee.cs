@@ -2,13 +2,14 @@ using System.Numerics;
 using Hexa.NET.ImGui;
 using StbEditor.App.Services;
 using StbEditor.Render;
+using StbEditor.Core;
 
 namespace StbEditor.App.Panels;
 
 /// <summary>
-/// Rubber-band selection (CK): a left drag that starts on empty space draws a rectangle; on release what is inside is selected —
-/// objects by their centre with the object tools, navmesh vertices (and triangles with all three corners inside) with the navmesh
-/// tool. Ctrl adds to the selection, Alt takes away.
+/// Rubber-band selection (CK): a left drag on empty space, or Shift+drag anywhere, draws a rectangle; on release what is inside
+/// is selected — objects by their centre with the object tools, navmesh vertices (and triangles with all three corners inside)
+/// with the navmesh tool. Ctrl adds to the selection, Alt takes away.
 /// </summary>
 internal sealed partial class RenderWindow
 {
@@ -120,68 +121,140 @@ internal sealed partial class RenderWindow
 
     private int _marqueeTest;
     private int _marqueeTestFrame;
+    private Vector2 _marqueeTestFrom, _marqueeTestTo;
+    private Matrix4x4 _marqueeTestView;
+    private Dictionary<SceneObject, RefState>? _marqueeTestStates;
+    private int _marqueeTestPending;
+    private string? _marqueeTestUndo;
 
     /// <summary>
-    /// --autotest-marquee [nav]: Shift+drag from 30 % to 70 % of the view with the fake mouse; logs what got selected against
-    /// what lies inside by the same projection. Returns true when done.
+    /// --autotest-marquee [nav]: Shift+drag from 30 % to 70 % of the view with the fake mouse.
+    /// Waits for input consumption, then checks the exact selection, release cleanup and absence of edits.
+    /// A failed gesture throws so the process cannot report success with an unfinished rectangle.
     /// </summary>
     public bool MarqueeTestStep()
     {
         var nav = Environment.GetCommandLineArgs().Contains("nav");
-        var from = _viewOrigin + _viewSize * 0.3f;
-        var to = _viewOrigin + _viewSize * 0.7f;
-        _marqueeTestFrame++;
+        var io = ImGui.GetIO();
+        if (++_marqueeTestFrame > 120 && _marqueeTest != 0)
+            Fail($"input timed out at stage {_marqueeTest}: mouse {io.MousePos}, down {ImGui.IsMouseDown(ImGuiMouseButton.Left)}, Shift {io.KeyShift}, pressed {_pressed}, object {_pressObject?.Reference}, nav press {_navMarqueePress}, marquee {_marqueeFrom}, drag {_drag}, gizmo {_gizmoWasUsing}/{_gizmoOver}");
+
         switch (_marqueeTest)
         {
-            case 0 when IsSettled:
+            case 0 when IsSettled && _viewSize.X > 8 && _viewSize.Y > 8:
                 _selection.Clear();
                 _navSelection = null;
                 if (nav) SetNavmeshMode(true); else _tool = EditTool.Select;
                 if (nav) _navSelectMode = NavSelectMode.Triangles;
-                Ui.ImGuiLayer.TestShift = true;
-                Ui.ImGuiLayer.TestMouse = (from, false);
-                (_marqueeTest, _marqueeTestFrame) = (1, 0);
-                break;
-            case 1 when _marqueeTestFrame > 3:
-                Ui.ImGuiLayer.TestMouse = (from, true);
-                (_marqueeTest, _marqueeTestFrame) = (2, 0);
-                break;
-            case 2:
-                Ui.ImGuiLayer.TestMouse = (Vector2.Lerp(from, to, Math.Min(1f, _marqueeTestFrame / 10f)), true);
-                if (_marqueeTestFrame > 12) (_marqueeTest, _marqueeTestFrame) = (3, 0);
-                break;
-            case 3:
-                Ui.ImGuiLayer.TestMouse = (to, false);
-                (_marqueeTest, _marqueeTestFrame) = (4, 0);
-                break;
-            case 4 when _marqueeTestFrame > 2:
-            {
-                Ui.ImGuiLayer.TestMouse = null;
+                Ui.ImGuiLayer.TestMouseButton = 0;
                 Ui.ImGuiLayer.TestShift = false;
-                var rect = (Min: from, Max: to);
-                var viewProj = _camera.View * _camera.Projection(_viewSize.X / _viewSize.Y);
-                if (nav)
-                {
-                    var expected = _scene!.Navmeshes.Sum(v => v.Record.Data is { } d ? Enumerable.Range(0, d.Triangles.Count).Count(t =>
-                        new[] { d.Triangles[t].Vertices.X, d.Triangles[t].Vertices.Y, d.Triangles[t].Vertices.Z }
-                            .All(i => ToScreen(P(d.Vertices[i]), viewProj, _viewOrigin, _viewSize) is { } at && Inside(rect, at))) : 0);
-                    Log.Info($"autotest-marquee: navmesh {_navSelection?.Triangles.Count ?? 0} triangle(s), {_navSelection?.Vertices.Count ?? 0} vertices selected; {expected} triangle(s) inside over all navmeshes");
-                }
-                else
-                {
-                    var options = _renderer!.Options;
-                    var expected = _scene!.Objects.Count(o => !o.IsDeleted && !options.Hides(o) && !options.FrozenReferences.Contains(o.Reference)
-                        && (o.Kind != SceneObjectKind.Marker || options.ShowMarkers)
-                        && ToScreen(o.BoundsCenter, viewProj, _viewOrigin, _viewSize) is { } at && Inside(rect, at));
-                    Log.Info($"autotest-marquee: {_selection.Count} object(s) selected, {expected} inside; marquee cleared {_marqueeFrom is null}");
-                    foreach (var o in _scene.Objects.Where(o => !_selection.Contains(o) && !o.IsDeleted && !options.Hides(o) && !options.FrozenReferences.Contains(o.Reference)
-                        && (o.Kind != SceneObjectKind.Marker || options.ShowMarkers)
-                        && ToScreen(o.BoundsCenter, viewProj, _viewOrigin, _viewSize) is { } at2 && Inside(rect, at2)))
-                        Log.Info($"autotest-marquee: inside but not selected: {o.BaseEditorId} {o.Kind} {o.Reference}");
-                }
-                return true;
+                Ui.ImGuiLayer.TestMouse = (Pixel(_viewOrigin + _viewSize * 0.3f), false);
+                Next(1);
+                break;
+            case 1 when _marqueeTestFrame > 3 && !io.KeyShift && !ImGui.IsMouseDown(ImGuiMouseButton.Left):
+            {
+                // Moving an unpressed mouse with Shift held is CK camera input, not test setup.
+                // Nav mode can also add toolbar rows, so take the rectangle only after layout settles.
+                var from = Pixel(_viewOrigin + _viewSize * 0.3f);
+                Ui.ImGuiLayer.TestMouse = (from, false);
+                if (Vector2.Distance(io.MousePos, from) > 0.5f) break;
+                _marqueeTestFrom = from;
+                _marqueeTestTo = Pixel(_viewOrigin + _viewSize * 0.7f);
+                Ui.ImGuiLayer.TestShift = true;
+                Next(2);
+                break;
             }
+            case 2 when _marqueeTestFrame > 2 && io.KeyShift:
+                _marqueeTestView = _camera.View;
+                _marqueeTestStates = _scene!.Objects.ToDictionary(o => o, o => o.State);
+                _marqueeTestPending = _document?.PendingCount ?? 0;
+                _marqueeTestUndo = _document?.History.UndoName;
+                Ui.ImGuiLayer.TestMouse = (_marqueeTestFrom, true);
+                Next(3);
+                break;
+            case 3 when (nav ? _navMarqueePress : _pressed && _pressObject is null) && ImGui.IsMouseDown(ImGuiMouseButton.Left):
+                Next(4);
+                break;
+            case 4:
+                Ui.ImGuiLayer.TestMouse = (Vector2.Lerp(_marqueeTestFrom, _marqueeTestTo, Math.Min(1f, _marqueeTestFrame / 10f)), true);
+                if (_marqueeTestFrame > 12) Next(5);
+                break;
+            case 5 when _marqueeTestFrame > 2 && _marqueeFrom == _marqueeTestFrom && Vector2.Distance(io.MousePos, _marqueeTestTo) < 0.5f:
+                // TestMouse is queued for the next NewFrame. Do not drop it or Shift until both
+                // ImGui and the viewport have actually consumed the release.
+                Ui.ImGuiLayer.TestMouse = (_marqueeTestTo, false);
+                Next(6);
+                break;
+            case 6 when _marqueeTestFrame > 3 && !ImGui.IsMouseDown(ImGuiMouseButton.Left)
+                && _marqueeFrom is null && !_pressed && !_navMarqueePress:
+                CheckSelection();
+                Ui.ImGuiLayer.TestShift = false;
+                Next(7);
+                break;
+            case 7 when _marqueeTestFrame > 3 && !io.KeyShift:
+                CheckSelection();
+                Ui.ImGuiLayer.TestMouse = null;
+                Log.Info("autotest-marquee: PASS; selection retained after release, input state cleared, no record edits");
+                return true;
         }
         return false;
+
+        void Next(int stage) => (_marqueeTest, _marqueeTestFrame) = (stage, 0);
+
+        static Vector2 Pixel(Vector2 point) => new(MathF.Floor(point.X), MathF.Floor(point.Y));
+
+        void Fail(string reason)
+        {
+            Ui.ImGuiLayer.TestMouse = null;
+            Ui.ImGuiLayer.TestShift = false;
+            Log.Error($"autotest-marquee: FAIL: {reason}");
+            throw new InvalidOperationException($"autotest-marquee: {reason}");
+        }
+
+        void CheckSelection()
+        {
+            if (_marqueeFrom is not null || _pressed || _pressObject is not null || _navPressed || _navMarqueePress || _navShiftPress
+                || _navDrag is not null || _drag != DragKind.None || _gizmoWasUsing || ImGui.IsMouseDown(ImGuiMouseButton.Left))
+                Fail("the released gesture left active input state");
+            if (_camera.View != _marqueeTestView)
+                Fail("the selection gesture moved the camera");
+            if ((_document?.PendingCount ?? 0) != _marqueeTestPending || _document?.History.UndoName != _marqueeTestUndo
+                || _marqueeTestStates!.Any(pair => !pair.Value.Equals(pair.Key.State)))
+                Fail("the selection gesture edited a record or created an undo step");
+
+            var rect = (Min: _marqueeTestFrom, Max: _marqueeTestTo);
+            var viewProj = _marqueeTestView * _camera.Projection(_viewSize.X / _viewSize.Y);
+            if (nav)
+            {
+                // The consumer selects the mesh with the most enclosed vertices, not every
+                // overlapping mesh. Check its identity and triangle indices, not just a count.
+                var candidates = _scene!.Navmeshes.Where(v => v.Record.Data is not null)
+                    .Select(v => (View: v, Vertices: Enumerable.Range(0, v.Record.Data!.Vertices.Count)
+                        .Where(i => ToScreen(P(v.Record.Data.Vertices[i]), viewProj, _viewOrigin, _viewSize) is { } at && Inside(rect, at)).ToHashSet()))
+                    .OrderByDescending(v => v.Vertices.Count).ToList();
+                if (candidates.Count == 0 || candidates[0].Vertices.Count == 0)
+                    Fail("no navmesh vertices inside the test rectangle");
+                var best = candidates[0];
+                var data = best.View.Record.Data!;
+                var expected = Enumerable.Range(0, data.Triangles.Count)
+                    .Where(t => best.Vertices.Contains(data.Triangles[t].Vertices.X) && best.Vertices.Contains(data.Triangles[t].Vertices.Y)
+                        && best.Vertices.Contains(data.Triangles[t].Vertices.Z)).ToHashSet();
+                if (expected.Count == 0 || _navSelection is not { } selected || selected.Mesh != best.View.Key
+                    || !selected.Triangles.SetEquals(expected) || selected.Vertices.Count != 0 || selected.Edges.Count != 0
+                    || !ReferenceEquals(_renderer!.NavSelection, selected))
+                    Fail($"navmesh selection differs: {_navSelection?.Triangles.Count ?? 0} selected, {expected.Count} expected");
+                Log.Info($"autotest-marquee: navmesh {best.View.Key}, {expected.Count} triangle(s) selected and inside; marquee cleared True");
+            }
+            else
+            {
+                var options = _renderer!.Options;
+                var expected = _scene!.Objects.Where(o => !o.IsDeleted && !options.Hides(o) && !options.FrozenReferences.Contains(o.Reference)
+                    && (o.Kind != SceneObjectKind.Marker || options.ShowMarkers)
+                    && ToScreen(o.BoundsCenter, viewProj, _viewOrigin, _viewSize) is { } at && Inside(rect, at)).ToHashSet();
+                if (expected.Count == 0 || !_selection.SetEquals(expected))
+                    Fail($"object selection differs: {_selection.Count} selected, {expected.Count} expected; missing {expected.Except(_selection).Count()}, extra {_selection.Except(expected).Count()}");
+                Log.Info($"autotest-marquee: {_selection.Count} object(s) selected, {expected.Count} inside; marquee cleared True");
+            }
+        }
     }
 }

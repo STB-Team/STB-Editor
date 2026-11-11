@@ -12,9 +12,8 @@ using static StbEditor.App.Ui.Loc;
 namespace StbEditor.App.Panels;
 
 /// <summary>
-/// Scripts tab of the Creation Kit, for any record with a plain VMAD (references and base objects):
-/// attach / remove scripts, fill properties with the types the compiled .pex declares, auto-fill
-/// object properties from EditorIDs. No compiling — scripts must exist as .pex.
+/// Shared script and property editor for record VMADs and quest-alias bindings.
+/// Stored properties remain editable when the compiled script is unavailable.
 /// </summary>
 internal static class ScriptsEditor
 {
@@ -24,6 +23,7 @@ internal static class ScriptsEditor
     /// <summary>The script library of the session (null before a Scripts tab was drawn).</summary>
     public static ScriptLibrary? Library => _library;
     private static object? _librarySession;
+    private static readonly Dictionary<uint, bool> AliasReferenceMode = new();
 
     /// <summary>Papyrus native types → record signatures they accept ("REF" = placed references).</summary>
     private static readonly Dictionary<string, string[]> Types = new(StringComparer.OrdinalIgnoreCase)
@@ -44,7 +44,7 @@ internal static class ScriptsEditor
         ["ImpactDataSet"] = ["IPDS"], ["Static"] = ["STAT"], ["MusicType"] = ["MUSC"], ["Outfit"] = ["OTFT"], ["AssociationType"] = ["ASTP"],
     };
 
-    /// <summary>Whether a record type carries a plain VMAD (quests/dialogue have fragment variants, not handled here).</summary>
+    /// <summary>Whether the record's VMAD exposes attached scripts (including fragment-bearing adapters).</summary>
     public static bool Supports(IMajorRecordGetter record) =>
         VmadProperty(record.GetType()) is not null;
 
@@ -75,6 +75,29 @@ internal static class ScriptsEditor
 
     public static void Draw(EditorApp app, IMajorRecordGetter current, Action<string, Action<IMajorRecord>> edit)
     {
+        if (current is IQuestGetter quest)
+        {
+            var aliasScripts = quest.Aliases.Sum(a => StbEditor.Core.AliasScripts.Binding(quest, a.ID)?.Scripts.Count ?? 0);
+            ImGui.TextWrapped(T("This section edits scripts attached to the quest itself. Scripts attached to aliases are in Quest Aliases, in each alias's detail."));
+            ImGui.TextColored(Theme.TextDim, TF($"Scripts attached to quest aliases: {aliasScripts}"));
+            ImGui.Separator();
+        }
+        Draw(app, current, VmadOf(current)?.Scripts ?? [],
+            (label, change) => edit(label, copy => change(VmadOf(copy, true).Scripts)));
+    }
+
+    public static void DrawAlias(EditorApp app, IQuestGetter quest, IQuestAliasGetter alias, Action<string, Action<IMajorRecord>> edit)
+    {
+        ImGui.PushID($"alias-scripts-{quest.FormKey}-{alias.ID}");
+        Draw(app, quest, StbEditor.Core.AliasScripts.Binding(quest, alias.ID)?.Scripts ?? [],
+            (label, change) => edit(label, copy => change(StbEditor.Core.AliasScripts.GetOrCreate((Quest)copy, alias.ID).Scripts)),
+            alias.Type == QuestAlias.TypeEnum.Location ? "LocationAlias" : "ReferenceAlias");
+        ImGui.PopID();
+    }
+
+    private static void Draw(EditorApp app, IMajorRecordGetter current, IReadOnlyList<IScriptEntryGetter> scripts,
+        Action<string, Action<IList<ScriptEntry>>> edit, string? aliasExtends = null)
+    {
         if (app.Session is not { } session) return;
         if (!ReferenceEquals(_librarySession, session))
         {
@@ -82,8 +105,8 @@ internal static class ScriptsEditor
             _librarySession = session;
         }
         var library = _library!;
-        var vmad = VmadOf(current);
-        var scripts = vmad?.Scripts ?? [];
+        if (aliasExtends is not null)
+            ImGui.TextColored(Theme.TextDim, TF($"Scripts attached to this alias ({aliasExtends})"));
 
         if (scripts.Count == 0) ImGui.TextColored(Theme.TextDim, T("No scripts attached. Type a script name below to attach one."));
 
@@ -99,14 +122,14 @@ internal static class ScriptsEditor
             var declared = pex is null ? [] : library.AllProperties(entry.Name);
             DrawProperties(app, entry, declared, scriptIndex, edit);
 
-            if (ImGui.SmallButton(T("Auto-fill"))) AutoFill(app, entry, declared, scriptIndex, edit);
+            if (ImGui.SmallButton(T("Auto-fill"))) AutoFill(app, entry, declared, scriptIndex, edit, current as IQuestGetter);
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Fill empty object properties whose name matches an EditorID (as the CK does)"));
             ImGui.SameLine();
             if (ImGui.SmallButton(T("Source"))) app.ScriptSources.Open(app, entry.Name);
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Edit the Papyrus source and compile it (CK: Edit Source)"));
             ImGui.SameLine();
             if (ImGui.SmallButton(T("Remove script")))
-                edit(TF($"Remove script {entry.Name}"), copy => VmadOf(copy, false).Scripts.RemoveAt(scriptIndex));
+                edit(TF($"Remove script {entry.Name}"), copy => copy.RemoveAt(scriptIndex));
             ImGui.PopID();
         }
 
@@ -115,24 +138,27 @@ internal static class ScriptsEditor
         ImGui.InputTextWithHint("##addscript", T("Script name to attach"), ref _addFilter, 128);
         ImGui.SameLine();
         var exact = library.Names.FirstOrDefault(n => string.Equals(n, _addFilter.Trim(), StringComparison.OrdinalIgnoreCase));
-        ImGui.BeginDisabled(exact is null || scripts.Any(x => string.Equals(x.Name, exact, StringComparison.OrdinalIgnoreCase)));
+        ImGui.BeginDisabled(exact is null || scripts.Any(x => string.Equals(x.Name, exact, StringComparison.OrdinalIgnoreCase))
+            || aliasExtends is not null && !DerivesFrom(exact, aliasExtends));
         if (ImGui.SmallButton(T("Add")) && exact is not null)
         {
             var name = exact;
-            edit(TF($"Add script {name}"), copy => VmadOf(copy, true).Scripts.Add(new ScriptEntry { Name = name }));
+            edit(TF($"Add script {name}"), copy => copy.Add(new ScriptEntry { Name = name }));
             _addFilter = string.Empty;
         }
         ImGui.EndDisabled();
+        if (exact is not null && aliasExtends is not null && !DerivesFrom(exact, aliasExtends))
+            ImGui.TextColored(Theme.Warning, TF($"Alias scripts must extend {aliasExtends}"));
 
         // A name no script has yet: write it (Scriptname X extends the type this record's scripts extend), attached once it compiles.
         var newName = _addFilter.Trim();
         if (exact is null && newName.Length >= 2 && System.Text.RegularExpressions.Regex.IsMatch(newName, @"^[A-Za-z_]\w*$"))
         {
             var signature = current is IPlacedNpcGetter ? "ACHR" : current is IPlacedGetter ? "REFR" : session.Catalog.Get(current.FormKey)?.Signature ?? "";
-            var extends = ScriptSourceWindows.DefaultExtends(signature);
+            var extends = aliasExtends ?? ScriptSourceWindows.DefaultExtends(signature);
             if (ImGui.SmallButton(TF($"New script {newName} (extends {extends})")))
             {
-                app.ScriptSources.Open(app, newName, extends, () => edit(TF($"Add script {newName}"), copy => VmadOf(copy, true).Scripts.Add(new ScriptEntry { Name = newName })));
+                app.ScriptSources.Open(app, newName, extends, () => edit(TF($"Add script {newName}"), copy => copy.Add(new ScriptEntry { Name = newName })));
                 _addFilter = string.Empty;
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Opens a new Papyrus source; once it compiles the script is attached here"));
@@ -141,7 +167,8 @@ internal static class ScriptsEditor
         if (_addFilter.Trim().Length >= 2 && exact is null)
         {
             // Every match, in a scrolling list (not just the first dozen).
-            var matches = library.Names.Where(n => n.Contains(_addFilter.Trim(), StringComparison.OrdinalIgnoreCase)).Order(StringComparer.OrdinalIgnoreCase).ToList();
+            var matches = library.Names.Where(n => n.Contains(_addFilter.Trim(), StringComparison.OrdinalIgnoreCase)
+                && (aliasExtends is null || DerivesFrom(n, aliasExtends))).Order(StringComparer.OrdinalIgnoreCase).ToList();
             if (matches.Count == 0) ImGui.TextColored(Theme.TextDim, T("No script with that name among the .pex files."));
             else
             {
@@ -162,7 +189,7 @@ internal static class ScriptsEditor
     }
 
     private static void DrawProperties(EditorApp app, IScriptEntryGetter entry, List<(PexProperty Property, string Owner)> declared, int scriptIndex,
-        Action<string, Action<IMajorRecord>> edit)
+        Action<string, Action<IList<ScriptEntry>>> edit)
     {
         if (declared.Count == 0 && entry.Properties.Count == 0)
         {
@@ -202,7 +229,7 @@ internal static class ScriptsEditor
             ImGui.TextColored(Theme.Error, stale.Name);
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Set in the plugin but not declared by the script (renamed or removed property)"));
             ImGui.TableNextColumn();
-            ImGui.TextColored(Theme.TextDim, Describe(app, stale));
+            DrawValue(app, StoredProperty(stale), stale, scriptIndex, edit);
             ImGui.TableNextColumn();
             var staleName = stale.Name;
             if (ImGui.SmallButton("x")) edit($"Remove {staleName}", copy => Entry(copy, scriptIndex).Properties.RemoveAll(p => p.Name == staleName));
@@ -211,10 +238,10 @@ internal static class ScriptsEditor
         ImGui.EndTable();
     }
 
-    private static ScriptEntry Entry(IMajorRecord copy, int index) => VmadOf(copy, false).Scripts[index];
+    private static ScriptEntry Entry(IList<ScriptEntry> copy, int index) => copy[index];
 
     /// <summary>The property in the copy, made with the right Mutagen type when missing.</summary>
-    private static T Property<T>(IMajorRecord copy, int scriptIndex, string name) where T : ScriptProperty, new()
+    private static T Property<T>(IList<ScriptEntry> copy, int scriptIndex, string name) where T : ScriptProperty, new()
     {
         var entry = Entry(copy, scriptIndex);
         var existing = entry.Properties.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -225,7 +252,7 @@ internal static class ScriptsEditor
         return created;
     }
 
-    private static void DrawValue(EditorApp app, PexProperty property, IScriptPropertyGetter? value, int scriptIndex, Action<string, Action<IMajorRecord>> edit)
+    private static void DrawValue(EditorApp app, PexProperty property, IScriptPropertyGetter? value, int scriptIndex, Action<string, Action<IList<ScriptEntry>>> edit)
     {
         var name = property.Name;
         ImGui.SetNextItemWidth(-1);
@@ -265,26 +292,19 @@ internal static class ScriptsEditor
             }
             default:
             {
-                FormKey? v = (value as IScriptObjectPropertyGetter)?.Object.FormKeyNullable;
-                var accepts = Accepts(property.ElementType);
-                if (FormField.Draw(app, $"sp-{scriptIndex}-{name}", ref v, accepts is ["REF"] ? null : accepts, references: accepts is ["REF"]))
-                {
-                    if (v is null)
-                        edit($"Clear {name}", copy => Entry(copy, scriptIndex).Properties.RemoveAll(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)));
-                    else
-                        edit(TF($"Set {name}"), copy =>
-                        {
-                            var p = Property<ScriptObjectProperty>(copy, scriptIndex, name);
-                            p.Object.SetTo(v.Value);
-                            p.Alias = -1;
-                        });
-                }
+                DrawObject(app, value as IScriptObjectPropertyGetter, property.ElementType, $"sp-{scriptIndex}-{name}", (form, alias) =>
+                    edit(TF($"Set {name}"), copy =>
+                    {
+                        var p = Property<ScriptObjectProperty>(copy, scriptIndex, name);
+                        p.Object.SetTo(form ?? FormKey.Null);
+                        p.Alias = alias;
+                    }));
                 break;
             }
         }
     }
 
-    private static void DrawArray(EditorApp app, PexProperty property, IScriptPropertyGetter? value, int scriptIndex, Action<string, Action<IMajorRecord>> edit)
+    private static void DrawArray(EditorApp app, PexProperty property, IScriptPropertyGetter? value, int scriptIndex, Action<string, Action<IList<ScriptEntry>>> edit)
     {
         var name = property.Name;
         var element = property.ElementType.ToLowerInvariant();
@@ -308,10 +328,13 @@ internal static class ScriptsEditor
             {
                 case IScriptObjectListPropertyGetter objects:
                 {
-                    FormKey? v = objects.Objects[i].Object.FormKeyNullable;
-                    var accepts = Accepts(property.ElementType);
-                    if (FormField.Draw(app, $"sa-{scriptIndex}-{name}-{i}", ref v, accepts is ["REF"] ? null : accepts, references: accepts is ["REF"]) && v is { } set)
-                        edit($"Set {name}[{index}]", copy => ((ScriptObjectListProperty)Entry(copy, scriptIndex).Properties.First(p => p.Name == name)).Objects[index].Object.SetTo(set));
+                    DrawObject(app, objects.Objects[i], property.ElementType, $"sa-{scriptIndex}-{name}-{i}", (form, alias) =>
+                        edit(TF($"Set {name}[{index}]"), copy =>
+                        {
+                            var item = Property<ScriptObjectListProperty>(copy, scriptIndex, name).Objects[index];
+                            item.Object.SetTo(form ?? FormKey.Null);
+                            item.Alias = alias;
+                        }));
                     break;
                 }
                 case IScriptIntListPropertyGetter ints:
@@ -373,6 +396,52 @@ internal static class ScriptsEditor
         ImGui.TreePop();
     }
 
+    private static void DrawObject(EditorApp app, IScriptObjectPropertyGetter? value, string type, string id, Action<FormKey?, short> set)
+    {
+        ImGui.PushID(id);
+        var modeId = ImGui.GetID("##alias-mode");
+        var isAlias = AliasReferenceMode.GetValueOrDefault(modeId, value is { Alias: not -1 } || ExtendsAlias(type));
+        if (ImGui.Checkbox(T("Quest alias reference") + "##alias-mode", ref isAlias))
+        {
+            AliasReferenceMode[modeId] = isAlias;
+            if (!isAlias && value is { Alias: not -1 }) set(value.Object.FormKeyNullable, -1);
+        }
+        FormKey? form = value?.Object.FormKeyNullable;
+        var accepts = isAlias ? ["QUST"] : Accepts(type);
+        if (FormField.Draw(app, "##object", ref form, accepts is ["REF"] ? null : accepts, references: accepts is ["REF"]))
+            set(form, -1);
+        if (isAlias && form is { IsNull: false } key)
+        {
+            var quest = StbEditor.Core.OverrideEditing.Override(app.Document, key)?.Record as IQuestGetter
+                ?? new StbEditor.Data.RecordLookup(app.Session!.Workspace, app.Session.Catalog).Resolve<IQuestGetter>(key);
+            var aliasId = value?.Alias ?? -1;
+            var selected = quest?.Aliases.FirstOrDefault(a => aliasId != -1 && a.ID == unchecked((ushort)aliasId));
+            ImGui.SetNextItemWidth(-1);
+            if (ImGui.BeginCombo("##alias", selected is null ? T("Select quest alias") : $"{selected.ID}: {selected.Name}"))
+            {
+                foreach (var alias in quest?.Aliases ?? [])
+                {
+                    if (alias.ID >= ushort.MaxValue) continue;
+                    if (ImGui.Selectable($"{alias.ID}: {alias.Name}##{alias.ID}", alias.ID == selected?.ID))
+                        set(key, unchecked((short)alias.ID));
+                }
+                ImGui.EndCombo();
+            }
+        }
+        ImGui.PopID();
+    }
+
+    private static bool ExtendsAlias(string type) =>
+        DerivesFrom(type, "ReferenceAlias") || DerivesFrom(type, "LocationAlias") || DerivesFrom(type, "Alias");
+
+    private static bool DerivesFrom(string? type, string parent)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var current = type; current is not null && seen.Add(current); current = _library?.Get(current)?.Parent)
+            if (current.Equals(parent, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
     /// <summary>Signatures a Papyrus type takes; custom scripts resolve through their parents.</summary>
     private static string[]? Accepts(string type)
     {
@@ -386,15 +455,22 @@ internal static class ScriptsEditor
     }
 
     private static void AutoFill(EditorApp app, IScriptEntryGetter entry, List<(PexProperty Property, string Owner)> declared, int scriptIndex,
-        Action<string, Action<IMajorRecord>> edit)
+        Action<string, Action<IList<ScriptEntry>>> edit, IQuestGetter? ownerQuest)
     {
         var session = app.Session!;
-        var fills = new List<(string Name, FormKey Key)>();
+        var fills = new List<(string Name, FormKey Key, short Alias)>();
         foreach (var (property, _) in declared)
         {
             if (!property.IsObject || property.IsArray) continue;
             if (entry.Properties.Any(p => string.Equals(p.Name, property.Name, StringComparison.OrdinalIgnoreCase))) continue;
 
+            if (ExtendsAlias(property.ElementType))
+            {
+                var aliasName = property.Name.StartsWith("Alias_", StringComparison.OrdinalIgnoreCase) ? property.Name[6..] : property.Name;
+                var alias = ownerQuest?.Aliases.FirstOrDefault(a => string.Equals(a.Name, aliasName, StringComparison.OrdinalIgnoreCase));
+                if (alias is not null && alias.ID < ushort.MaxValue) fills.Add((property.Name, ownerQuest!.FormKey, unchecked((short)alias.ID)));
+                continue;
+            }
             var accepts = Accepts(property.ElementType);
             FormKey? found;
             if (accepts is ["REF"])
@@ -406,7 +482,7 @@ internal static class ScriptsEditor
                 var pool = accepts is null ? session.Catalog.ByKey.Values : accepts.SelectMany(sig => session.Catalog.BySignature.GetValueOrDefault(sig) ?? []);
                 found = pool.FirstOrDefault(r => string.Equals(r.EditorId, property.Name, StringComparison.OrdinalIgnoreCase))?.FormKey;
             }
-            if (found is { } key) fills.Add((property.Name, key));
+            if (found is { } key) fills.Add((property.Name, key, -1));
         }
 
         if (fills.Count == 0)
@@ -417,23 +493,27 @@ internal static class ScriptsEditor
 
         edit(TF($"Auto-fill {entry.Name} ({fills.Count})"), copy =>
         {
-            foreach (var (name, key) in fills)
+            foreach (var (name, key, alias) in fills)
             {
                 var p = Property<ScriptObjectProperty>(copy, scriptIndex, name);
                 p.Object.SetTo(key);
-                p.Alias = -1;
+                p.Alias = alias;
             }
         });
         Log.Info($"auto-fill {entry.Name}: {string.Join(", ", fills.Select(f => f.Name))}");
     }
 
-    private static string Describe(EditorApp app, IScriptPropertyGetter property) => property switch
+    internal static PexProperty StoredProperty(IScriptPropertyGetter property) => new(property.Name, property switch
     {
-        IScriptObjectPropertyGetter o => FormField.Describe(app, o.Object.FormKey),
-        IScriptIntPropertyGetter i => i.Data.ToString(),
-        IScriptFloatPropertyGetter f => f.Data.ToString("0.####"),
-        IScriptBoolPropertyGetter b => b.Data ? "true" : "false",
-        IScriptStringPropertyGetter s => s.Data,
-        _ => property.GetType().Name,
-    };
+        IScriptIntPropertyGetter => "Int",
+        IScriptFloatPropertyGetter => "Float",
+        IScriptBoolPropertyGetter => "Bool",
+        IScriptStringPropertyGetter => "String",
+        IScriptIntListPropertyGetter => "Int[]",
+        IScriptFloatListPropertyGetter => "Float[]",
+        IScriptBoolListPropertyGetter => "Bool[]",
+        IScriptStringListPropertyGetter => "String[]",
+        IScriptObjectListPropertyGetter => "Form[]",
+        _ => "Form",
+    }, "", true, false, false);
 }

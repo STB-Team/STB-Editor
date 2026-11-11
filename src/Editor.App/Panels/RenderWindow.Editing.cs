@@ -134,40 +134,90 @@ internal sealed partial class RenderWindow
 
     public EditTool Tool => _tool;
 
-    private void DrawEditToolbar(EditorApp app)
+    private void DrawEditToolbar(EditorApp app, bool compact)
     {
         ToolButton(T("Select"), EditTool.Select, T("Q — select only"));
+        ToolbarNext(T("Move"), ImGui.GetFontSize() * 1.7f);
         ToolButton(T("Move"), EditTool.Move, T("W — move gizmo (LMB drag on the object works with any tool)"));
+        ToolbarNext(T("Rotate"), ImGui.GetFontSize() * 1.7f);
         ToolButton(T("Rotate"), EditTool.Rotate, T("E — rotate gizmo"));
+        ToolbarNext(T("Scale"), ImGui.GetFontSize() * 1.7f);
         ToolButton(T("Scale"), EditTool.Scale, T("R — uniform scale gizmo"));
-        ToolButton(T("Edit navmesh"), EditTool.Navmesh, T("N — navmesh editing: click vertex/triangle (Ctrl adds), drag moves (Z height), Shift+click adds a vertex (with 2 selected: a triangle), Shift+drag selects in a rectangle; CK's navmesh keys and toolbar row (T V G W A F I O P Q R D)"));
-        ToolButton(T("Edit land"), EditTool.Land, T("H — landscape editing: brush settings and textures in the Landscape panel; LMB drag sculpts/paints, Shift inverts raise/lower"));
 
-        Toggle(_localSpace ? T("Local") : T("World"), () => _localSpace, v => _localSpace = v, T("L — gizmo axes: world or the object's own"));
-        Toggle(T("Grid"), () => _gridSnap, v => _gridSnap = v, T("G — snap positions to the grid step"));
-        ImGui.SetNextItemWidth(ImGui.GetFontSize() * 3.2f);
+        var mode = _tool switch
+        {
+            EditTool.Navmesh => T("Edit navmesh"),
+            EditTool.Land => T("Edit land"),
+            EditTool.Palette => T("Palette"),
+            EditTool.Region => T("Regions"),
+            _ => T("Tools"),
+        };
+        ToolbarNext(mode);
+        var specialized = _tool is EditTool.Navmesh or EditTool.Land or EditTool.Palette or EditTool.Region;
+        if (Ui.Studio.Button(mode + "###viewporttools", selected: specialized)) ImGui.OpenPopup("##viewporttools");
+        if (ImGui.BeginPopup("##viewporttools"))
+        {
+            ToolButton(T("Edit navmesh"), EditTool.Navmesh, T("N — navmesh editing: click vertex/triangle (Ctrl adds), drag moves (Z height), Shift+click adds a vertex (with 2 selected: a triangle), Shift+drag selects in a rectangle; CK's navmesh keys and toolbar row (T V G W A F I O P Q R D)"));
+            ToolButton(T("Edit land"), EditTool.Land, T("H — landscape editing: brush settings and textures in the Landscape panel; LMB drag sculpts/paints, Shift inverts raise/lower"));
+            ToolButton(T("Palette"), EditTool.Palette, T("Place objects from the object palette"));
+            ToolButton(T("Regions"), EditTool.Region, T("Edit worldspace region borders"));
+            if (compact)
+            {
+                ImGui.Separator();
+                DrawObjectActions(app);
+            }
+            ImGui.EndPopup();
+        }
+        ToolbarNext(T("Transform"));
+        DrawTransformOptions();
+        if (!compact)
+        {
+            ToolbarNext(T("Havok"));
+            DrawObjectActions(app);
+        }
+    }
+
+    private void DrawObjectActions(EditorApp app)
+    {
+        ImGui.BeginDisabled(_selection.Count == 0 || _havok is not null);
+        if (Ui.Studio.Button(T("Havok"))) RunHavokSim();
+        ImGui.EndDisabled();
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(T("Alt+H — Run Havok Sim: the selected objects fall with physics onto what is around them and come to rest (one Ctrl+Z)"));
+        ToolbarNext(T("Create") + " v", ImGui.GetStyle().ItemSpacing.X);
+        // The existing Create helper starts with SameLine; a local group gives it a
+        // zero-width anchor even when the toolbar has just wrapped.
+        ImGui.BeginGroup();
+        ImGui.Dummy(Vector2.Zero);
+        DrawCreateMenu(app);
+        ImGui.EndGroup();
+    }
+
+    private void DrawTransformOptions()
+    {
+        if (Ui.Studio.Button(T("Transform") + "###viewporttransform")) ImGui.OpenPopup("##viewporttransform");
+        if (!ImGui.BeginPopup("##viewporttransform")) return;
+        _localSpace = Toggle(_localSpace ? T("Local") : T("World"), _localSpace, T("L — gizmo axes: world or the object's own"));
+        ImGui.Separator();
+        _gridSnap = Toggle(T("Grid"), _gridSnap, T("G — snap positions to the grid step"));
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(ImGui.GetFontSize() * 5);
         if (ImGui.BeginCombo("##gridstep", $"{_gridStep:0}", ImGuiComboFlags.NoArrowButton))
         {
             foreach (var step in new[] { 1f, 4f, 8f, 16f, 32f, 64f, 128f, 256f, 512f })
                 if (ImGui.Selectable($"{step:0}", Math.Abs(step - _gridStep) < 0.01f)) _gridStep = step;
             ImGui.EndCombo();
         }
+        _angleSnap = Toggle(T("Angle"), _angleSnap, T("Snap rotation to the angle step"));
         ImGui.SameLine();
-        Toggle(T("Angle"), () => _angleSnap, v => _angleSnap = v, T("Snap rotation to the angle step"));
-        ImGui.SetNextItemWidth(ImGui.GetFontSize() * 3.2f);
+        ImGui.SetNextItemWidth(ImGui.GetFontSize() * 5);
         if (ImGui.BeginCombo("##anglestep", $"{_angleStep:0}°", ImGuiComboFlags.NoArrowButton))
         {
             foreach (var step in new[] { 1f, 5f, 10f, 15f, 22.5f, 45f, 90f })
                 if (ImGui.Selectable($"{step:0.#}°", Math.Abs(step - _angleStep) < 0.01f)) _angleStep = step;
             ImGui.EndCombo();
         }
-        ImGui.SameLine();
-        ImGui.BeginDisabled(_selection.Count == 0 || _havok is not null);
-        if (ImGui.Button(T("Havok"))) RunHavokSim();
-        ImGui.EndDisabled();
-        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip(T("Alt+H — Run Havok Sim: the selected objects fall with physics onto what is around them and come to rest (one Ctrl+Z)"));
-        DrawCreateMenu(app);
+        ImGui.EndPopup();
     }
 
     // ------------------------------------------------------------------ Havok sim
@@ -218,12 +268,28 @@ internal sealed partial class RenderWindow
     private void ToolButton(string label, EditTool tool, string tooltip)
     {
         var active = _tool == tool;
-        if (active) ImGui.PushStyleColor(ImGuiCol.Button, Ui.Theme.ButtonActive);
+        var key = tool switch { EditTool.Select => "Q", EditTool.Move => "W", EditTool.Rotate => "E", EditTool.Scale => "R", _ => null };
+        var size = key is null ? Vector2.Zero : new Vector2(ImGui.CalcTextSize(label).X + ImGui.GetStyle().FramePadding.X * 2 + ImGui.GetFontSize() * 1.7f, 0);
+        ImGui.PushStyleVar(ImGuiStyleVar.ButtonTextAlign, new Vector2(0, 0.5f));
         // The tool in the ID: labels may repeat the view toggles on the row above in a translation.
-        if (ImGui.Button($"{label}###tool{tool}")) _tool = tool;
-        if (active) ImGui.PopStyleColor();
+        if (Ui.Studio.Button($"{label}###tool{tool}", size, selected: active))
+        {
+            if (tool == EditTool.Navmesh) SetNavmeshMode(true);
+            else _tool = tool;
+            if (tool is EditTool.Navmesh or EditTool.Land or EditTool.Palette or EditTool.Region) ImGui.CloseCurrentPopup();
+        }
+        ImGui.PopStyleVar();
+        if (key is not null && ImGui.IsItemVisible())
+        {
+            var em = ImGui.GetFontSize();
+            var min = ImGui.GetItemRectMin();
+            var max = ImGui.GetItemRectMax();
+            var at = new Vector2(max.X - ImGui.GetStyle().FramePadding.X - em, min.Y + (max.Y - min.Y - em) * 0.5f);
+            var draw = ImGui.GetWindowDrawList();
+            draw.AddRectFilled(at - new Vector2(em * 0.15f, 1), at + new Vector2(em * 1.15f, em + 1), ImGui.GetColorU32(Ui.Theme.Shadow), 2);
+            draw.AddText(at + new Vector2((em - ImGui.CalcTextSize(key).X) * 0.5f, 0), ImGui.GetColorU32(active ? Ui.Theme.Accent : Ui.Theme.TextDim), key);
+        }
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(tooltip);
-        ImGui.SameLine();
     }
 
     // ------------------------------------------------------------------ input
@@ -233,7 +299,7 @@ internal sealed partial class RenderWindow
         var io = ImGui.GetIO();
         var mouse = io.MousePos - origin;
         var focused = ImGui.IsWindowFocused();
-        var gizmoBusy = ImGuizmo.IsUsing() || (ImGuizmo.IsOver() && _selection.Count > 0 && _tool is not (EditTool.Select or EditTool.Land or EditTool.Navmesh or EditTool.Region));
+        var gizmoBusy = ImGuizmo.IsUsing() || (!io.KeyShift && ImGuizmo.IsOver() && _selection.Count > 0 && _tool is not (EditTool.Select or EditTool.Land or EditTool.Navmesh or EditTool.Region));
 
         if (hovered && (ImGui.IsMouseClicked(ImGuiMouseButton.Right) || ImGui.IsMouseClicked(ImGuiMouseButton.Middle) || ImGui.IsMouseClicked(ImGuiMouseButton.Left)))
             ImGui.SetWindowFocus();
@@ -278,7 +344,7 @@ internal sealed partial class RenderWindow
 
         // ---- camera without buttons: Shift orbits/looks, Space pans (Creation Kit).
         var noButtons = !ImGui.IsMouseDown(ImGuiMouseButton.Left) && !ImGui.IsMouseDown(ImGuiMouseButton.Right) && !ImGui.IsMouseDown(ImGuiMouseButton.Middle);
-        if (hovered && noButtons && !io.WantTextInput)
+        if (hovered && noButtons && !_pressed && !_navMarqueePress && !io.WantTextInput)
         {
             var d = io.MousePos - _shiftLastMouse;
             // The mouse came back from elsewhere (another panel, outside the window): no jump.
@@ -297,7 +363,7 @@ internal sealed partial class RenderWindow
 
         if (active && ImGui.IsMouseDown(ImGuiMouseButton.Middle)) Pan(io.MouseDelta);
 
-        if (active && io.KeyAlt && ImGui.IsMouseDown(ImGuiMouseButton.Left))
+        if (active && io.KeyAlt && !io.KeyShift && !_pressed && !_navMarqueePress && ImGui.IsMouseDown(ImGuiMouseButton.Left))
         {
             var pivot = _selection.Count > 0 ? SelectionCenter() : _camera.Position + _camera.Forward * 1000f;
             _camera.Orbit(pivot, io.MouseDelta.X * 0.005f, -io.MouseDelta.Y * 0.005f);
@@ -323,7 +389,7 @@ internal sealed partial class RenderWindow
         if (_pickRequest is not null && ImGui.IsKeyPressed(ImGuiKey.Escape, false)) _pickRequest = null;
 
         // ---- left button: select, and drag the selection.
-        if (_tool is not (EditTool.Land or EditTool.Navmesh or EditTool.Palette or EditTool.Region) && hovered && ImGui.IsMouseClicked(ImGuiMouseButton.Left) && !io.KeyAlt && !gizmoBusy && _scene is not null)
+        if (_tool is not (EditTool.Land or EditTool.Navmesh or EditTool.Palette or EditTool.Region) && hovered && ImGui.IsMouseClicked(ImGuiMouseButton.Left) && (!io.KeyAlt || io.KeyShift) && !gizmoBusy && _scene is not null)
         {
             _pressed = true;
             _dragMouseStart = io.MousePos;
@@ -417,7 +483,7 @@ internal sealed partial class RenderWindow
                 if (ImGui.IsKeyPressed(ImGuiKey.M, false)) _renderer!.Options.ShowMarkers ^= true;
                 if (ImGui.IsKeyPressed(ImGuiKey.F4, false) && !io.KeyCtrl) _renderer!.Options.ShowCollision ^= true;
                 if (ImGui.IsKeyPressed(ImGuiKey.B, false)) _renderer!.Options.CellBorders ^= true;
-                if (ImGui.IsKeyPressed(ImGuiKey.K, false) && app.Settings.ClaudeBridge) PlaceMark(app, mouse, size);
+                if (ImGui.IsKeyPressed(ImGuiKey.K, false) && app.Settings.AiBridge) PlaceMark(app, mouse, size);
                 if (ImGui.IsKeyPressed(ImGuiKey.Key1, false) && !io.KeyAlt) HideSelection();
                 if (ImGui.IsKeyPressed(ImGuiKey.Key1, false) && io.KeyAlt) ShowHidden();
             }
@@ -644,7 +710,10 @@ internal sealed partial class RenderWindow
     private unsafe void DrawGizmo(Vector2 origin, Vector2 size)
     {
         _gizmoOver = false;
-        if (_selection.Count == 0 || _tool is EditTool.Select or EditTool.Land or EditTool.Navmesh or EditTool.Palette or EditTool.Region || _drag != DragKind.None || _scene is null) return;
+        // Shift+drag belongs to the rectangle, including over a gizmo handle. A CK press must not
+        // turn into a gizmo drag when its cursor later crosses one.
+        if (_selection.Count == 0 || _tool is EditTool.Select or EditTool.Land or EditTool.Navmesh or EditTool.Palette or EditTool.Region || _drag != DragKind.None || _scene is null
+            || (!_gizmoWasUsing && (_pressed || ImGui.GetIO().KeyShift))) return;
 
         ImGuizmo.SetOrthographic(false);
         ImGuizmo.SetDrawlist(ImGui.GetWindowDrawList());

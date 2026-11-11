@@ -89,9 +89,28 @@ internal sealed class CellViewPanel : Panel
         if (!RequireSession(app)) return;
         SyncDrafts(app);
 
-        // Cells on the left, the loaded cell's objects on the right (drag the border to resize).
         var avail = ImGui.GetContentRegionAvail();
-        if (_split <= 0) _split = avail.X * 0.55f;
+        if (avail.X < ImGui.GetFontSize() * 40)
+        {
+            if (ImGui.BeginTabBar("##cellsections"))
+            {
+                if (ImGui.BeginTabItem(T("Cells") + "###cellbrowser"))
+                {
+                    DrawCells(app);
+                    ImGui.EndTabItem();
+                }
+                if (ImGui.BeginTabItem(T("Objects in cell") + "###cellobjects"))
+                {
+                    DrawObjects(app);
+                    ImGui.EndTabItem();
+                }
+                ImGui.EndTabBar();
+            }
+            return;
+        }
+
+        // Keep both lists side by side when there is enough room, including after a dock resize.
+        _split = Math.Clamp(_split <= 0 ? avail.X * 0.55f : _split, avail.X * 0.3f, avail.X * 0.7f);
         if (ImGui.BeginChild("##cellList", new Vector2(_split, 0), ImGuiChildFlags.ResizeX))
             DrawCells(app);
         _split = ImGui.GetItemRectSize().X;
@@ -151,14 +170,15 @@ internal sealed class CellViewPanel : Panel
         ImGui.SetNextItemWidth(-1);
         ImGui.InputTextWithHint("##objectfilter", T("Filter objects (EditorID, type, FormID)"), ref _objectFilter, 256);
 
+        var compact = ImGui.GetContentRegionAvail().X < ImGui.GetFontSize() * 36;
         var flags = ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.Resizable | ImGuiTableFlags.BordersInnerV
             | ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.Hideable;
         if (!ImGui.BeginTable("##objects", 4, flags)) return;
         ImGui.TableSetupScrollFreeze(0, 1);
         ImGui.TableSetupColumn(T("Base"), ImGuiTableColumnFlags.WidthStretch, 1.4f);
         ImGui.TableSetupColumn(T("Type"));
-        ImGui.TableSetupColumn(T("Ref ID"));
-        ImGui.TableSetupColumn(T("Plugin"), ImGuiTableColumnFlags.WidthStretch, 0.8f);
+        ImGui.TableSetupColumn(T("Ref ID"), compact ? ImGuiTableColumnFlags.DefaultHide : ImGuiTableColumnFlags.None);
+        ImGui.TableSetupColumn(T("Plugin"), ImGuiTableColumnFlags.WidthStretch | (compact ? ImGuiTableColumnFlags.DefaultHide : 0), 0.8f);
         ImGui.TableHeadersRow();
 
         var ws = app.Session.Workspace;
@@ -192,6 +212,7 @@ internal sealed class CellViewPanel : Panel
     private void DrawCells(EditorApp app)
     {
         var ws = app.Session!.Workspace;
+        var compact = ImGui.GetContentRegionAvail().X < ImGui.GetFontSize() * 36;
 
         // Where the camera is: the exterior cell under it, highlighted in the list (and followed, if asked).
         var camera = app.RenderWindow.CameraCell;
@@ -202,7 +223,7 @@ internal sealed class CellViewPanel : Panel
             var label = cameraCell?.EditorId ?? T("(wilderness)");
             ImGui.TextColored(Theme.Accent, TF($"Camera: {label} [{c.X}, {c.Y}]"));
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("The exterior cell the camera is over now (the Render Window loads the cells around it)"));
-            ImGui.SameLine();
+            if (!compact) ImGui.SameLine();
             if (ImGui.SmallButton(T("Show in the list"))) ShowCameraCell(c.World);
             ImGui.SameLine();
             ImGui.Checkbox(T("Follow") + "##followcamera", ref _follow);
@@ -214,12 +235,25 @@ internal sealed class CellViewPanel : Panel
         {
             ImGui.TextColored(Theme.Accent, TF($"Loaded: {app.Session.Catalog.Get(inside)?.EditorId ?? ws.FormIdText(inside)}"));
         }
-        if (ImGui.RadioButton(T("Cells"), _mode == 0)) _mode = 0;
-        ImGui.SameLine();
-        if (ImGui.RadioButton(T("Find placed objects"), _mode == 1)) _mode = 1;
+        if (compact)
+        {
+            ImGui.SetNextItemWidth(-1);
+            if (ImGui.BeginCombo("##cellmode", _mode == 0 ? T("Cells") : T("Find placed objects")))
+            {
+                if (ImGui.Selectable(T("Cells"), _mode == 0)) _mode = 0;
+                if (ImGui.Selectable(T("Find placed objects"), _mode == 1)) _mode = 1;
+                ImGui.EndCombo();
+            }
+        }
+        else
+        {
+            if (ImGui.RadioButton(T("Cells"), _mode == 0)) _mode = 0;
+            ImGui.SameLine();
+            if (ImGui.RadioButton(T("Find placed objects"), _mode == 1)) _mode = 1;
+        }
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Every placed copy of a base object in the chosen worldspace (or in the interiors), whatever cell it is in"));
 
-        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X * 0.45f);
+        ImGui.SetNextItemWidth(compact ? -1 : ImGui.GetContentRegionAvail().X * 0.45f);
         var current = _worlds.Count > 0 ? _worlds[_worldIndex] : default;
         if (ImGui.BeginCombo("##world", $"{current.Label} ({current.Count:N0})", ImGuiComboFlags.HeightLarge))
         {
@@ -234,7 +268,7 @@ internal sealed class CellViewPanel : Panel
             ImGui.EndCombo();
         }
 
-        ImGui.SameLine();
+        if (!compact) ImGui.SameLine();
         ImGui.SetNextItemWidth(-1);
         if (_mode == 1)
         {
@@ -254,9 +288,9 @@ internal sealed class CellViewPanel : Panel
         ImGui.TableSetupScrollFreeze(0, 1);
         ImGui.TableSetupColumn(T("Editor ID"), ImGuiTableColumnFlags.WidthStretch, 1.2f);
         ImGui.TableSetupColumn(T("Name"), ImGuiTableColumnFlags.WidthStretch, 1f);
-        ImGui.TableSetupColumn(T("Grid"), interiors ? ImGuiTableColumnFlags.DefaultHide : ImGuiTableColumnFlags.None);
-        ImGui.TableSetupColumn(T("Form ID"));
-        ImGui.TableSetupColumn(T("Last change"), ImGuiTableColumnFlags.WidthStretch, 0.8f);
+        ImGui.TableSetupColumn(T("Grid"), interiors || compact ? ImGuiTableColumnFlags.DefaultHide : ImGuiTableColumnFlags.None);
+        ImGui.TableSetupColumn(T("Form ID"), compact ? ImGuiTableColumnFlags.DefaultHide : ImGuiTableColumnFlags.None);
+        ImGui.TableSetupColumn(T("Last change"), ImGuiTableColumnFlags.WidthStretch | (compact ? ImGuiTableColumnFlags.DefaultHide : 0), 0.8f);
         ImGui.TableHeadersRow();
 
         // Cells created in this session (not saved yet).

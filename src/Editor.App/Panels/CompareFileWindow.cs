@@ -65,7 +65,7 @@ internal sealed class CompareFileWindow
         }
         if (!_open || app.Session is not { } session) return;
         ImGui.SetNextWindowSize(app.Scaled(900, 560), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Compare with another file") + "###comparefile", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Compare with another file") + "###comparefile", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             ImGui.SetNextItemWidth(ImGui.GetFontSize() * 16);
             if (ImGui.BeginCombo("##plugin", _plugin.Length > 0 ? _plugin : T("(plugin)")))

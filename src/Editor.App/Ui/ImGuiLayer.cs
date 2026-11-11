@@ -40,8 +40,8 @@ internal sealed unsafe class ImGuiLayer : IDisposable
         _iniPath = Marshal.StringToCoTaskMemUTF8(iniFile);
         io.IniFilename = (byte*)_iniPath;
 
-        // Futura Condensed runs narrow; a little larger reads like the game's menus.
-        var fontSize = MathF.Round((fonts.Body is null ? 16f : 18f) * dpiScale);
+        // System text stays readable in dense tables; game fonts are reserved for headings.
+        var fontSize = MathF.Round(16f * dpiScale);
         DefaultFont = fonts.Body is { } body ? io.Fonts.AddFontFromFileTTF(body, fontSize) : AddFont(io, ["segoeui.ttf", "arial.ttf"], fontSize);
         MonoFont = AddFont(io, ["consola.ttf", "cour.ttf"], MathF.Round(15f * dpiScale));
         HeaderFont = fonts.Header is { } header ? io.Fonts.AddFontFromFileTTF(header, MathF.Round(22f * dpiScale)) : DefaultFont;

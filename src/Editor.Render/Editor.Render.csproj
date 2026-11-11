@@ -3,7 +3,8 @@
     <RootNamespace>StbEditor.Render</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="BepuPhysics" Version="2.4.0" />
+    <!-- 2.4 ReduceFace can cycle and overrun its unmanaged index buffer on valid Havok point clouds. -->
+    <PackageReference Include="BepuPhysics" Version="2.5.0-beta.33" />
     <ProjectReference Include="..\Editor.Data\Editor.Data.csproj" />
     <ProjectReference Include="..\Editor.Assets\Editor.Assets.csproj" />
     <ProjectReference Include="..\Editor.Nif\Editor.Nif.csproj" />

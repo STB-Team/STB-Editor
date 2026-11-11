@@ -169,7 +169,7 @@ internal sealed class VoiceFilesWindow
         if (!_open || app.Session is not { } session) return;
         if (_exportPath.Length == 0 && _plugin.Length > 0) _exportPath = DefaultExport(_plugin);
         ImGui.SetNextWindowSize(app.Scaled(980, 620), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Voice files") + "###voicefiles", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Voice files") + "###voicefiles", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             ImGui.SetNextItemWidth(ImGui.GetFontSize() * 16);
             if (ImGui.BeginCombo("##voiceplugin", _plugin.Length > 0 ? _plugin : T("(plugin)")))

@@ -98,7 +98,7 @@ internal sealed class ArchiveWindow
         }
         if (!_open) return;
         ImGui.SetNextWindowSize(app.Scaled(620, 420), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Pack into BSA") + "###archive", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Pack into BSA") + "###archive", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             if (app.ActivePlugin is not { } active)
             {

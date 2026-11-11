@@ -96,7 +96,7 @@ internal sealed class ScriptSourceWindows
             if (entry.Focus) { ImGui.SetNextWindowFocus(); entry.Focus = false; }
             var open = true;
             var dirty = entry.Text != entry.Saved ? " *" : "";
-            if (ImGui.Begin($"{TF($"Script: {entry.Name}")}{dirty}###script{entry.Id}", ref open, ImGuiWindowFlags.NoSavedSettings))
+            if (Studio.BeginWindow($"{TF($"Script: {entry.Name}")}{dirty}###script{entry.Id}", ref open, ImGuiWindowFlags.NoSavedSettings))
                 DrawEntry(app, entry);
             ImGui.End();
             if (!open) _open.RemoveAt(i--);

@@ -91,7 +91,7 @@ internal sealed class SpreadsheetWindow
     {
         if (!_open || app.Session is not { } session) return;
         ImGui.SetNextWindowSize(app.Scaled(1200, 700), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(Title("Spreadsheets"), ref _open, ImGuiWindowFlags.NoDocking))
+        if (Studio.BeginWindow(Title("Spreadsheets"), ref _open, ImGuiWindowFlags.NoDocking))
         {
             if (ImGui.BeginTabBar("##sheets"))
             {

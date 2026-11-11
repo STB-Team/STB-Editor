@@ -105,9 +105,8 @@ internal sealed partial class RenderWindow
     /// <summary>Toolbar «Preset» button: built-in and saved presets, save the current view, delete one.</summary>
     private void DrawPresets(EditorApp app)
     {
-        if (ImGui.Button(T("Preset") + "###viewpreset")) ImGui.OpenPopup("##presetpopup");
+        if (Studio.Button(T("Preset") + "###viewpreset")) ImGui.OpenPopup("##presetpopup");
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("View presets: what the toolbar shows, Show / Hide, light, fly speed, grid radius"));
-        ImGui.SameLine();
         if (!ImGui.BeginPopup("##presetpopup")) return;
         foreach (var preset in ViewPreset.BuiltIn)
             if (ImGui.Selectable(T(preset.Name) + "##builtin" + preset.Name)) ApplyView(app, preset);
@@ -133,7 +132,7 @@ internal sealed partial class RenderWindow
         ImGui.InputTextWithHint("##presetname", T("Name"), ref _presetName, 64);
         ImGui.SameLine();
         ImGui.BeginDisabled(_presetName.Trim().Length == 0);
-        if (ImGui.Button(T("Save the current view")))
+        if (Studio.Button(T("Save the current view")))
         {
             var name = _presetName.Trim();
             saved.RemoveAll(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));

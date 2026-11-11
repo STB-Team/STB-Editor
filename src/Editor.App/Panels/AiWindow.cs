@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Text.Json;
 using Hexa.NET.ImGui;
 using StbEditor.App.Ui;
 using static StbEditor.App.Ui.Loc;
@@ -6,43 +7,59 @@ using static StbEditor.App.Ui.Loc;
 namespace StbEditor.App.Panels;
 
 /// <summary>
-/// View → Claude: the bridge's switch and status, the command that connects Claude Code, what Claude did lately, the
-/// user's marks for Claude (K over the Render Window) with notes, and Claude's notes on the view.
+/// View → AI / MCP: generic endpoint/configuration, permissions, proposals, marks, notes and call history.
+/// Claude Code chat is a separate optional launcher; no CLI is needed for the MCP bridge.
 /// </summary>
-internal sealed class ClaudeWindow
+internal sealed class AiWindow
 {
     private bool _open;
 
     public void Show() => _open = true;
 
-    /// <summary>For every folder Claude Code runs in (user scope), not only the one it was added from.</summary>
-    public static string ConnectCommand(int port) => $"claude mcp add --scope user --transport http stb-editor http://127.0.0.1:{port}/mcp";
+    public static string Endpoint(int port) => $"http://127.0.0.1:{port}/mcp";
+
+    /// <summary>Common MCP JSON shape; clients may use different configuration keys.</summary>
+    public static string McpConfig(int port) => JsonSerializer.Serialize(new
+    {
+        mcpServers = new Dictionary<string, object> { ["stb-editor"] = new { type = "http", url = Endpoint(port) } },
+    }, new JsonSerializerOptions { WriteIndented = true });
+
+    /// <summary>Optional Claude Code setup, independent of the generic connection panel.</summary>
+    public static string ClaudeConnectCommand(int port) => $"claude mcp add --scope user --transport http stb-editor {Endpoint(port)}";
 
     /// <summary>The bridge's switches (also in View → Settings).</summary>
     public static void DrawSwitches(EditorApp app)
     {
         var settings = app.Settings;
-        var on = settings.ClaudeBridge;
-        if (ImGui.Checkbox(T("Let Claude Code work with the editor (local MCP server)"), ref on)) { settings.ClaudeBridge = on; settings.Save(); }
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Claude Code on this computer can look at the Render Window, move the camera, list, select and edit objects, read and change record fields, search and leave notes on the view. Only programs on this computer can connect."));
+        var on = settings.AiBridge;
+        if (ImGui.Checkbox(T("Enable local AI / MCP bridge"), ref on)) { settings.AiBridge = on; settings.Save(); }
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Compatible MCP clients on this computer can inspect the live editor, capture the viewport, move the camera, select objects and propose edits. No model or Claude CLI is required by the bridge. Only local programs can connect."));
+        var edits = settings.AiBridgeEdits;
+        ImGui.BeginDisabled(!on && !edits);
+        if (ImGui.Checkbox(T("Allow AI edits (structured edits are undoable; no plugin save tool)"), ref edits)) { settings.AiBridgeEdits = edits; settings.Save(); }
+        ImGui.EndDisabled();
+        var scripts = settings.AiBridgeScripts;
+        ImGui.BeginDisabled((!on || !edits) && !scripts);
+        if (ImGui.Checkbox(T("Allow remote unrestricted C# scripts (unsafe; separate permission)"), ref scripts)) { settings.AiBridgeScripts = scripts; settings.Save(); }
+        ImGui.EndDisabled();
+        ImGui.TextWrapped(T("Remote C# is NOT sandboxed: it can read/write files and start processes. These side effects are NOT undoable. Turning permission off blocks queued scripts and record commits, not already-started code."));
         ImGui.BeginDisabled(!on);
-        var edits = settings.ClaudeBridgeEdits;
-        if (ImGui.Checkbox(T("Claude may change things (each change can be undone; Claude never saves)"), ref edits)) { settings.ClaudeBridgeEdits = edits; settings.Save(); }
-        var port = settings.ClaudeBridgePort;
-        ImGui.SetNextItemWidth(ImGui.GetFontSize() * 6);
-        if (Fields.Int(T("Port") + "##claudeport", port, out var newPort) && newPort is >= 1024 and <= 65535) { settings.ClaudeBridgePort = newPort; settings.Save(); }
+        var port = settings.AiBridgePort;
+        ImGui.SetNextItemWidth(ImGui.GetFontSize() * 10);
+        if (Fields.Int(T("Port") + "##aiport", port, out var newPort) && newPort is >= 1024 and <= 65535) { settings.AiBridgePort = newPort; settings.Save(); }
         ImGui.EndDisabled();
         var status = app.Bridge.Status;
         ImGui.TextColored(app.Bridge.Running ? Theme.Accent : status.StartsWith("error", StringComparison.Ordinal) ? Theme.Error : Theme.TextDim,
             app.Bridge.Running ? TF($"Listening: {status}") : status == "off" ? T("Off") : status);
-        if (on)
-        {
-            var command = ConnectCommand(settings.ClaudeBridgePort);
-            ImGui.TextColored(Theme.TextDim, T("Connect Claude Code once (in a terminal):"));
-            ImGui.TextUnformatted(command);
-            ImGui.SameLine();
-            if (ImGui.SmallButton(T("Copy") + "##claudecmd")) ImGui.SetClipboardText(command);
-        }
+        ImGui.SeparatorText(T("MCP connection"));
+        var endpoint = Endpoint(settings.AiBridgePort);
+        ImGui.TextUnformatted(endpoint);
+        ImGui.SameLine();
+        if (ImGui.SmallButton(T("Copy endpoint"))) ImGui.SetClipboardText(endpoint);
+        ImGui.TextWrapped(T("Use an MCP client supporting Streamable HTTP with JSON responses. No SSE stream or stdio launcher is provided; client configuration formats may differ."));
+        if (ImGui.CollapsingHeader(T("MCP JSON configuration")))
+            ImGui.TextUnformatted(McpConfig(settings.AiBridgePort));
+        if (ImGui.SmallButton(T("Copy MCP JSON"))) ImGui.SetClipboardText(McpConfig(settings.AiBridgePort));
     }
 
     private readonly Services.ClaudeChat _chat = new();
@@ -53,17 +70,21 @@ internal sealed class ClaudeWindow
     /// <summary>«Ask Claude»: a message box, the conversation with the tools it used, stop and new conversation.</summary>
     private void DrawChat(EditorApp app)
     {
+        ImGui.TextColored(Theme.TextDim, T("Connect Claude Code once (in a terminal):"));
+        var command = ClaudeConnectCommand(app.Settings.AiBridgePort);
+        ImGui.TextWrapped(command);
+        if (ImGui.SmallButton(T("Copy") + "##claudecmd")) ImGui.SetClipboardText(command);
         ImGui.SeparatorText(T("Ask Claude"));
-        if (!app.Settings.ClaudeBridge) { ImGui.TextColored(Theme.TextDim, T("Turn the bridge on above first.")); return; }
+        if (!app.Settings.AiBridge) { ImGui.TextColored(Theme.TextDim, T("Turn the bridge on above first.")); return; }
         if (Services.ClaudeChat.FindCli() is null) { ImGui.TextColored(Theme.Warning, T("Claude Code (claude) is not installed on this computer.")); return; }
-        ImGui.TextColored(Theme.TextDim, T("Runs your Claude Code with this editor's tools only (uses your Claude account). Ctrl+Enter sends."));
+        ImGui.TextColored(Theme.TextDim, T("Runs your optional Claude Code CLI with this editor's MCP tools (uses your Claude account). Ctrl+Enter sends."));
         var height = ImGui.GetTextLineHeightWithSpacing() * 10;
         if (ImGui.BeginChild("##chat", new Vector2(0, height), ImGuiChildFlags.Borders))
         {
             foreach (var entry in _chat.Transcript)
             {
                 var colour = entry.Kind switch { "user" => Theme.Accent, "tool" => Theme.TextDim, "error" => Theme.Error, _ => Theme.Text };
-                var prefix = entry.Kind switch { "user" => T("You: "), "tool" => "  → ", "error" => "! ", _ => "Claude: " };
+                var prefix = entry.Kind switch { "user" => T("You: "), "tool" => "  → ", "error" => "! ", _ => T("Claude: ") };
                 ImGui.PushStyleColor(ImGuiCol.Text, colour);
                 ImGui.TextWrapped(prefix + entry.Text);
                 ImGui.PopStyleColor();
@@ -95,15 +116,15 @@ internal sealed class ClaudeWindow
         _chat.Pump();
         if (!_open) return;
         ImGui.SetNextWindowSize(app.Scaled(620, 560), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(Title("Claude") + "###claudewindow", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(Title("AI / MCP") + "###aiwindow", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             DrawSwitches(app);
-            DrawChat(app);
+            if (ImGui.CollapsingHeader(T("Optional: Claude Code launcher"))) DrawChat(app);
 
             var window = app.RenderWindow;
             if (window.PendingProposal is { } proposal)
             {
-                ImGui.SeparatorText(T("Claude proposes"));
+                ImGui.SeparatorText(T("AI proposes"));
                 ImGui.TextColored(Theme.Accent, TF($"{proposal.Title}: {proposal.Changes.Count} object(s), shown tinted in the Render Window"));
                 if (ImGui.Button(T("Apply") + "##proposal")) window.Decide(true);
                 ImGui.SameLine();
@@ -114,8 +135,10 @@ internal sealed class ClaudeWindow
             if (window.PastProposals.Count > 0 && ImGui.CollapsingHeader(TF($"Earlier proposals ({window.PastProposals.Count})")))
                 foreach (var p in window.PastProposals) ImGui.TextColored(Theme.TextDim, $"#{p.Id} {p.Title}: {p.Status}");
 
-            ImGui.SeparatorText(TF($"Marks for Claude ({window.Marks.Count})"));
-            ImGui.TextColored(Theme.TextDim, T("K over the Render Window marks the point under the cursor; write what you want there. Claude reads them with get_user_marks."));
+            ImGui.SeparatorText(TF($"Marks for AI ({window.Marks.Count})"));
+            ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextDim);
+            ImGui.TextWrapped(T("K over the Render Window marks the point under the cursor; write what you want there. MCP clients read them with get_user_marks."));
+            ImGui.PopStyleColor();
             for (var i = 0; i < window.Marks.Count; i++)
             {
                 var m = window.Marks[i];
@@ -132,11 +155,11 @@ internal sealed class ClaudeWindow
             }
             if (window.Marks.Count > 0 && ImGui.SmallButton(T("Remove all marks"))) window.Marks.Clear();
 
-            ImGui.SeparatorText(TF($"Claude's notes on the view ({window.Annotations.Count})"));
+            ImGui.SeparatorText(TF($"AI notes on the view ({window.Annotations.Count})"));
             if (window.Annotations.Count > 0 && ImGui.SmallButton(T("Clear the notes"))) window.Annotations.Clear();
 
-            ImGui.SeparatorText(T("What Claude did"));
-            if (ImGui.BeginChild("##claudehistory", Vector2.Zero, ImGuiChildFlags.Borders))
+            ImGui.SeparatorText(T("MCP tool history"));
+            if (ImGui.BeginChild("##aihistory", Vector2.Zero, ImGuiChildFlags.Borders))
             {
                 foreach (var (at, tool, summary, error) in app.Bridge.History)
                 {

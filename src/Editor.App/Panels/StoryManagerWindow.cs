@@ -47,7 +47,7 @@ internal sealed class StoryManagerWindow
         if (!_open || app.Session is not { } session) return;
         if (_builtFor != app.Document.Version) Refresh(app);
         ImGui.SetNextWindowSize(app.Scaled(620, 640), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Story Manager") + "###storymanager", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Story Manager") + "###storymanager", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             if (ImGui.SmallButton(T("refresh"))) Refresh(app);
             ImGui.SameLine();

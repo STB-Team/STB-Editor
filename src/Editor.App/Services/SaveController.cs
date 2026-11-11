@@ -3,9 +3,9 @@ using StbEditor.Core;
 namespace StbEditor.App.Services;
 
 /// <summary>
-/// Save in three steps: prepare (background: write + verify a temp file), confirm when the
-/// writer would change untouched records, commit (close the session's file handles, back up,
-/// swap the file in, reload with the same view).
+/// Save in three steps: prepare (background: write + verify a temp file), confirm when new
+/// masters are needed or the writer would change untouched records, commit (close the session's
+/// file handles, back up, swap the file in, reload with the same view).
 /// </summary>
 internal sealed class SaveController
 {
@@ -46,7 +46,7 @@ internal sealed class SaveController
             return;
         }
 
-        if (result.LossyRecords.Count > 0 && !_lossyConfirmed.Contains(result.TargetPath))
+        if (result.AddedMasters.Count > 0 || (result.LossyRecords.Count > 0 && !_lossyConfirmed.Contains(result.TargetPath)))
         {
             foreach (var line in result.LossyRecords.Take(20)) Log.Warn($"save check: {line}");
             AwaitingConfirmation = result;
@@ -59,7 +59,7 @@ internal sealed class SaveController
     public void Confirm(EditorApp app)
     {
         if (AwaitingConfirmation is not { } result) return;
-        _lossyConfirmed.Add(result.TargetPath);
+        if (result.LossyRecords.Count > 0) _lossyConfirmed.Add(result.TargetPath);
         AwaitingConfirmation = null;
         Commit(app, result);
     }

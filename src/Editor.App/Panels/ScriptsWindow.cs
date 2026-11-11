@@ -98,7 +98,7 @@ internal sealed class ScriptsWindow
         Finish(app);
         if (!_open || app.Session is null) return;
         ImGui.SetNextWindowSize(app.Scaled(960, 640), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Scripts") + "###scripts", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Scripts") + "###scripts", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             var listWidth = ImGui.GetFontSize() * 15;
             if (ImGui.BeginChild("##scriptlist", new Vector2(listWidth, 0), ImGuiChildFlags.Borders))

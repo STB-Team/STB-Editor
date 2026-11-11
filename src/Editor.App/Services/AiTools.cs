@@ -11,17 +11,17 @@ using Noggog;
 using StbEditor.App.Panels;
 using StbEditor.Core;
 using StbEditor.Render;
-using ToolResult = StbEditor.App.Services.ClaudeBridge.ToolResult;
+using ToolResult = StbEditor.App.Services.AiBridge.ToolResult;
 
 namespace StbEditor.App.Services;
 
 /// <summary>
-/// The tools the Claude bridge offers. Each runs on the UI thread with the editor as it is; tools that change something
-/// (<see cref="Tool.Edits"/>) make ordinary undoable steps and never save — the user saves.
+/// Tools offered by the generic MCP bridge. Structured edits use ordinary undo steps without saving plugins.
+/// run_script is separately authorized unrestricted C#: its external side effects cannot be undone.
 /// </summary>
-internal static class ClaudeTools
+internal static class AiTools
 {
-    public sealed record Tool(string Name, string Description, JsonObject Schema, bool Edits, Func<EditorApp, JsonElement, Task<ToolResult>> Run)
+    public sealed record Tool(string Name, string Description, JsonObject Schema, bool Edits, Func<EditorApp, JsonElement, Task<ToolResult>> Run, bool Scripts = false)
     {
         public JsonObject Describe() => new() { ["name"] = Name, ["description"] = Description, ["inputSchema"] = Schema.DeepClone() };
     }
@@ -30,8 +30,11 @@ internal static class ClaudeTools
         "STB Editor is a Skyrim SE Creation Kit replacement; these tools drive the copy the user has open. World units: Skyrim units " +
         "(Z up, one cell = 4096); headings in degrees, 0 = north, clockwise; pitch in degrees, negative looks down. Records and " +
         "references are named by EditorID, FormID as the editor shows it (e.g. 0001A2B3, load-order prefixed) or 'ID:Plugin.esp'. " +
-        "Every change is one undoable step in the editor and is NOT saved: the user reviews and saves (Ctrl+S). Look with screenshot " +
-        "after changing things; leave notes for the user with annotate; the user marks places for you with K (get_user_marks).";
+        "Structured record/reference edits use undo steps and are NOT saved: the user reviews and saves (Ctrl+S). No save tool is offered. " +
+        "run_script requires separate explicit permission AND edit permission: it executes unrestricted local C#, with filesystem/process " +
+        "access; external side effects are NOT sandboxed or undoable. Revoking permission rejects queued scripts and record commits, " +
+        "but cannot stop or undo already-started code. Look with screenshot after changing things; leave notes with annotate; " +
+        "the user marks places with K (get_user_marks).";
 
     // ------------------------------------------------------------------ schema helpers
 
@@ -103,7 +106,7 @@ internal static class ClaudeTools
         return session.Workspace.ParseFormReference(text) ?? session.ByEditorId(text);
     }
 
-    private static string Id(EditorApp app, FormKey key) => app.Session!.Workspace.FormIdText(key);
+    private static string Id(EditorApp app, FormKey key) => app.Session!.Workspace.ToFormId(key) is { } id ? id.ToString("X8") : key.ToString();
 
     private static string Label(EditorApp app, FormKey key) => app.Session!.Catalog.Get(key)?.EditorId ?? Id(app, key);
 
@@ -262,7 +265,7 @@ internal static class ClaudeTools
                     if (scale is { } sc) s = s with { Scale = Math.Clamp(sc, 0.01f, 10f) };
                     return (o, s);
                 }).ToList();
-                app.RenderWindow.SetStates("Claude: move", changes);
+                app.RenderWindow.SetStates("AI: move", changes);
                 var list = new JsonArray();
                 foreach (var o in objects) list.Add(Describe(app, o));
                 return Ok(new JsonObject { ["moved"] = list, ["undo"] = app.Document.History.UndoName });
@@ -286,11 +289,11 @@ internal static class ClaudeTools
             {
                 var objects = Objects(app, a, out var missing);
                 if (objects.Count == 0) return Fail($"no loaded reference{(missing is null ? "" : $" ({missing})")}");
-                app.RenderWindow.SetStates("Claude: delete", objects.Select(o => (o, o.State with { Deleted = true })).ToList());
+                app.RenderWindow.SetStates("AI: delete", objects.Select(o => (o, o.State with { Deleted = true })).ToList());
                 return Done(ToolResult.Text($"deleted {objects.Count} (Ctrl+Z brings them back)"));
             }),
 
-        new("undo", "Undoes (or with redo = true redoes) the last steps — the user's or Claude's.",
+        new("undo", "Undoes (or with redo = true redoes) the last steps — the user's or the AI client's. Cannot undo script filesystem/process side effects.",
             Schema(("steps", "integer", "default 1", false), ("redo", "boolean", "redo instead", false)),
             true, (app, a) =>
             {
@@ -394,13 +397,13 @@ internal static class ClaudeTools
                 return Done(ToolResult.Text($"{added} note(s) on the view, {app.RenderWindow.Annotations.Count} in all"));
             }),
 
-        new("clear_annotations", "Removes Claude's notes from the Render Window.", Schema(), false, (app, _) =>
+        new("clear_annotations", "Removes AI notes from the Render Window.", Schema(), false, (app, _) =>
         {
             app.RenderWindow.Annotations.Clear();
             return Done(ToolResult.Text("cleared"));
         }),
 
-        new("get_user_marks", "Places the user marked for Claude (K over the Render Window), with their notes, the cell and the object under each.",
+        new("get_user_marks", "Places the user marked for AI (K over the Render Window), with their notes, the cell and the object under each.",
             Schema(), false, (app, _) =>
             {
                 var list = new JsonArray();
@@ -481,7 +484,7 @@ internal static class ClaudeTools
                 return Ok(new JsonObject { ["log"] = new JsonArray(lines), ["undo_history"] = new JsonArray(undo), ["unsaved_changes"] = app.Document.PendingCount, ["newest_crash"] = crash });
             }),
 
-        new("run_script", "Runs a C# script as the editor's Scripts window does (globals: Records<T>(), Get, Find, Edit<T>(record, change), Print, Selected, Plugins); its record edits become one undoable step.",
+        new("run_script", "Runs unrestricted local C# as the Scripts window does. Requires BOTH edit and separate remote-script permission (off by default). NOT sandboxed: code can read/write files and start processes; these side effects are NOT undoable and may save data. Only collected record edits become one unsaved undo step. Revocation blocks queued execution/record commit, not already-started code. Globals: Records<T>(), Get, Find, Edit<T>(record, change), Print, Selected, Plugins.",
             Schema(("code", "string", "C# script body (Mutagen getter types, e.g. foreach (var w in Records<IWeaponGetter>()) Print(w.EditorID);)", true)),
             true, async (app, a) =>
             {
@@ -489,16 +492,26 @@ internal static class ClaudeTools
                 var session = app.Session!;
                 var selected = app.RenderWindow.SelectedObjects.Select(o => o.Reference).ToList();
                 if (app.Selected is { } picked && !selected.Contains(picked)) selected.Add(picked);
-                var outcome = await Task.Run(() => ScriptHost.Run(code, session, app.Document, selected, CancellationToken.None));
-                if (outcome.Error is { } error) return ToolResult.Text((outcome.Output.Length > 0 ? outcome.Output + "\n\n" : "") + "error: " + error, true);
-                var committed = await ClaudeBridge.OnUi(app, editor =>
+                var document = app.Document;
+                var outcome = await Task.Run(async () =>
                 {
-                    var edits = outcome.Edits.Select(r => (r, RecordPlace.TopLevel, (RefContext?)null)).ToList();
-                    if (edits.Count > 0) editor.Document.CommitEdits("Claude: script", edits);
-                    return edits.Count;
+                    // Reauthorize after the worker was queued; arbitrary C# must not start using stale permissions.
+                    var denied = await AiBridge.OnUi(app, editor => AiBridge.PermissionError(editor.Settings, true, true));
+                    if (denied is not null) throw new InvalidOperationException(denied);
+                    return await ScriptHost.Run(code, session, document, selected, CancellationToken.None);
                 });
-                return ToolResult.Text((outcome.Output.Length > 0 ? outcome.Output.TrimEnd() + "\n\n" : "") + $"done in {outcome.Time.TotalSeconds:0.0} s; {committed} record(s) changed (one undo step, not saved)");
-            }),
+                if (outcome.Error is { } error) return ToolResult.Text((outcome.Output.Length > 0 ? outcome.Output + "\n\n" : "") + "error: " + error, true);
+                return await AiBridge.OnUi(app, editor =>
+                {
+                    if (AiBridge.PermissionError(editor.Settings, true, true) is { } denied)
+                        return ToolResult.Text(denied + "\nRecord edits were not committed. Already-started C# may have caused external side effects.", true);
+                    if (editor.Session != session || editor.Document != document)
+                        return ToolResult.Text("the open session changed; record edits were not committed. External script side effects cannot be undone.", true);
+                    var edits = outcome.Edits.Select(r => (r, RecordPlace.TopLevel, (RefContext?)null)).ToList();
+                    if (edits.Count > 0) editor.Document.CommitEdits("AI: script", edits);
+                    return ToolResult.Text((outcome.Output.Length > 0 ? outcome.Output.TrimEnd() + "\n\n" : "") + $"done in {outcome.Time.TotalSeconds:0.0} s; {edits.Count} record(s) changed (one undo step, not saved). External code/file/process side effects are not undoable.");
+                });
+            }, Scripts: true),
     ];
 
     // ------------------------------------------------------------------ bodies
@@ -529,13 +542,14 @@ internal static class ClaudeTools
         }
         return new JsonObject
         {
-            ["editor"] = typeof(ClaudeTools).Assembly.GetName().Version?.ToString(),
+            ["editor"] = typeof(AiTools).Assembly.GetName().Version?.ToString(),
             ["loaded"] = session is not null,
             ["plugins"] = session?.Workspace.Plugins.Count,
             ["active_file"] = app.ActivePlugin?.Name,
             ["unsaved_changes"] = app.Document.PendingCount,
             ["next_undo"] = app.Document.History.UndoName,
-            ["claude_may_change"] = app.Settings.ClaudeBridgeEdits,
+            ["ai_may_change"] = app.Settings.AiBridgeEdits,
+            ["ai_may_run_scripts"] = app.Settings.AiBridgeEdits && app.Settings.AiBridgeScripts,
             ["render"] = render,
             ["user_marks"] = window.Marks.Count,
             ["notes"] = window.Annotations.Count,
@@ -593,7 +607,7 @@ internal static class ClaudeTools
         var session = app.Session;
         var encoding = StbEditor.Data.Raw.StringEncodingDetector.WriteEncoding(app.ActivePlugin?.Encoding ?? session.Workspace.DefaultEncoding, session.Game.Language);
         if (RecordRoundTrip.Read(copy, session.Game.Release, encoding) is null) return Fail($"the record would not save that way: {RecordRoundTrip.LastError}");
-        app.Document.CommitEdit($"Claude: {Label(app, key)}.{pathText}", copy, RecordPlace.TopLevel);
+        app.Document.CommitEdit($"AI: {Label(app, key)}.{pathText}", copy, RecordPlace.TopLevel);
         return Done(ToolResult.Text($"{Label(app, key)}.{pathText} = {RecordFields.Repr(RecordFields.Get(copy, path))} (unsaved; Ctrl+Z undoes)"));
     }
 

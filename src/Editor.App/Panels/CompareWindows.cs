@@ -26,10 +26,14 @@ internal sealed class CompareWindows
         public List<CompareColumn> Columns { get; set; } = [];
         public int BuiltAt { get; set; } = -1;
         public bool Focus { get; set; } = true;
+        public bool New { get; set; } = true;
     }
 
     private readonly List<Entry> _open = [];
     private int _next;
+    private bool _dockAll;
+
+    public void DockAll() => _dockAll = true;
 
     public int Count => _open.Count;
 
@@ -73,20 +77,30 @@ internal sealed class CompareWindows
             var title = entry.Versions
                 ? TF($"Versions: {first?.EditorId ?? session.Workspace.FormIdText(entry.Keys[0])} [{first?.Signature}]")
                 : TF($"Compare {entry.Keys.Length} records");
-            ImGui.SetNextWindowSize(app.Scaled(1100, 720), ImGuiCond.FirstUseEver);
-            ImGui.SetNextWindowPos(ImGui.GetMainViewport().Pos + ImGui.GetMainViewport().Size * 0.5f + new Vector2(i % 6, i % 6) * 24, ImGuiCond.FirstUseEver, new Vector2(0.5f));
+            if (DefaultLayout.DocumentDockId != 0 && (_dockAll || entry.New))
+                ImGui.SetNextWindowDockID(DefaultLayout.DocumentDockId, ImGuiCond.Always);
+            else if (entry.New)
+            {
+                ImGui.SetNextWindowSize(app.Scaled(1100, 720), ImGuiCond.FirstUseEver);
+                ImGui.SetNextWindowPos(ImGui.GetMainViewport().Pos + ImGui.GetMainViewport().Size * 0.5f + new Vector2(i % 6, i % 6) * 24, ImGuiCond.FirstUseEver, new Vector2(0.5f));
+            }
             if (entry.Focus)
             {
                 ImGui.SetNextWindowFocus();
                 entry.Focus = false;
             }
+            var maximum = ImGui.GetMainViewport().WorkSize * 0.95f;
+            ImGui.SetNextWindowSizeConstraints(Vector2.Min(app.Scaled(760, 540), maximum), maximum);
 
             var open = true;
-            if (ImGui.Begin($"{title}###compare{entry.Id}", ref open, ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoDocking))
-                entry.View.Draw(app, entry.Columns, entry.Versions);
+            var visible = Studio.BeginWindow($"{title}###compare{entry.Id}", ref open);
+            DefaultLayout.EnsureFloatingDocumentSize(Vector2.Min(app.Scaled(760, 540), maximum), maximum);
+            if (visible) entry.View.Draw(app, entry.Columns, entry.Versions);
             ImGui.End();
+            entry.New = false;
             if (!open) _open.RemoveAt(i--);
         }
+        _dockAll = false;
     }
 
     /// <summary>

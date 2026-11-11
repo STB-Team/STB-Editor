@@ -101,7 +101,7 @@ internal sealed class TextsWindow
         }
         if (!_open || app.Session is not { } session) return;
         ImGui.SetNextWindowSize(app.Scaled(680, 400), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Texts for translation") + "###texts", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Texts for translation") + "###texts", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             ImGui.TextWrapped(T("Every text the player sees in a plugin — names, descriptions, books, dialogue, journal, messages — as a JSON file with an empty \"translation\" for each. Fill it in (by hand or with a tool) and import it back."));
             ImGui.SeparatorText(T("Export"));

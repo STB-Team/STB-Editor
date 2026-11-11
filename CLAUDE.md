@@ -3,9 +3,42 @@
 ## What this is
 
 STB Editor — a standalone replacement for the Skyrim Creation Kit (placement, cells, landscape,
-navmesh, record editing, script properties without compiling). Plan and reasoning:
-`docs/PLAN.md`, teardown of the SkyrimMapEditor concept and of CK: `docs/ANALYSIS.md`.
-Status (v0.76.0, 2026-10-21) — the table in `README.md` is the source of truth. Done: data, NIF,
+navmesh, record editing, Papyrus source/properties and external compilation). Current architecture:
+`docs/PLAN.md`; historical SkyrimMapEditor/CK binary teardown: `docs/ANALYSIS.md`.
+Unreleased UI redesign (2026-11-11): `Panels/EditorShell.cs` + `Panel.cs` offer explicit World / Records /
+Classic arrangements; existing layout.ini is preserved on startup. Records docks forms/comparisons as tabs;
+scene, selections and EditDocument survive switches. Toolbar groups retain every command, RU/EN and UI scaling.
+`RenderWindow.Update` completes workers even with a hidden viewport. Main text is Segoe UI; game headers remain.
+`--layout world|records|classic`, `--autotest-layout` (with --cell) exercises docking and edit/undo preservation.
+FormField typing/suggestions use the scoped numeric ImGui ID so parallel forms cannot steal each other's input.
+Second visual pass: `Ui/Studio.cs` owns edged native buttons/tabs; `Theme.Surfaces` applies structural
+surfaces to every palette. Forms use an identity/action card and vertical section navigation, or a
+section popup in narrow Inspectors, while retaining the existing specialized editors.
+Tester refinements: Records is two columns (catalog 38%, Inspector/Preview/documents as right-hand tabs).
+The central dock ID is refreshed after ini loading; document size constraints also repair tiny floating dock hosts.
+All closable windows/modals use Studio.BeginWindow/BeginPopupModal and WindowChrome's padded close targets.
+Core/AliasScripts binds VMAD by quest FormKey + alias ID; Quest Aliases reuse ScriptsEditor, including arrays
+and quest-alias references. --autotest-aliasscripts <scratch-dir> [questEditorID] covers scratch save/reload.
+Bepu is pinned to published 2.5.0-beta.33: stable 2.4's ReduceFace can cycle and overrun unmanaged
+storage during thumbnail collision creation (confirmed in the user's crash dump). Do not disable collision
+or downgrade to 2.4. `stbedit-cli collisiontest` checks cube edges, a public cycle regression, bounds and inertia.
+Unreleased AI/MCP: `Services/AiBridge.cs`, `AiTools.cs`, `Panels/AiWindow.cs`, `RenderWindow.Ai.cs`;
+`docs/AI-BRIDGE.md` documents generic Streamable HTTP JSON access (no SSE), not a model provider.
+Settings `AiBridge`, `AiBridgeEdits`, `AiBridgeScripts` default false; port defaults 47110.
+Legacy ClaudeBridge/Port/Edits settings migrate, explicit new keys win, scripts are never inherited.
+Structured tools have no save command, but never claim AI cannot write files: run_script is unsandboxed
+C# with process/filesystem access, requires edits plus a separate scripts opt-in, and external effects
+are not undoable. Permission revocation cannot reverse already-running arbitrary code.
+Keep optional `Services/ClaudeChat.cs` honestly Claude Code-specific and separate/collapsed from generic MCP.
+The benefit is ready access to unsaved context, loaded scene/camera, FormKeys, undo and reviewed proposals;
+an agent with shell/source could implement alternate IPC/harness. No SKSE live-link or universal model launcher.
+Unreleased regression fixes: new masters always require SaveController confirmation, even with zero LossyRecords.
+Confirming only masters must not suppress later lossy warnings; --autotest-savecheck checks both plugin hashes before consent.
+Marquee tests wait for consumed press/release and assert exact selection/no edits; Shift marquee wins over gizmo/Alt-orbit.
+MCP IDs use canonical FormKey for new/unloaded plugins, not human-only Workspace.FormIdText; --autotest-place tests re-selection
+through get_status/select, then real Rotate/Move input, bounded movement and scratch save/reload.
+Status (0.76.0 + Unreleased, updated 2026-11-11) — `README.md` is the feature source of truth;
+implemented does not mean every input has passed all regressions. Released history below: data, NIF,
 D3D11 view incl. particles/billboards/shader animation, NPCs from race/outfit/FaceGen in bind pose;
 ref edits with undo (`Core/EditDocument`), CK-style drags + ImGuizmo (`Panels/RenderWindow.Editing.cs`),
 lossless saving into an active plugin (`Core/PluginWriter` + `Data/Raw/RawSplice`,
@@ -79,7 +112,7 @@ v0.37.0: FaceGen export (`Render/FaceGenExport.cs` parts / textures / colours, `
 directions are not what Mutagen's names suggest (`FaceGenMorphs.Sliders`); race morph = MorphRace's; SkinnyMorph = 1 − weight/100;
 TXST TX02..TX05 go to NIF slots 5, 2, 3, 4; head part partitions (BSDynamicTriShape) hold no positions — never patch them;
 tint = QNAM, then each layer but SkinTone lerped by mask red × value; hair tint colour = hair colour × 2 / 255.
-v0.38.0: Run Havok Sim (`Render/PhysicsDrop.cs`, BepuPhysics 2.4: metres inside, convex hull bodies, static meshes shared per model, triangles
+v0.38.0: Run Havok Sim (`Render/PhysicsDrop.cs`, originally BepuPhysics 2.4, now pinned as above: metres inside, convex hull bodies, static meshes shared per model, triangles
 turned clockwise for Bepu, contents of a moving piece and pieces starting inside each other left out; `RenderWindow.RunHavokSim` on a worker,
 `FinishHavokSim` one undo step; Alt+H).
 v0.39.0: face editor (`Panels/FaceEditor.cs`, drawn by `FormView.DrawTab` for the NPC «Appearance» tab: a working Npc copy, Moved → preview,
@@ -161,14 +194,17 @@ v0.70.0: BOS preview (`Core/BosRules.cs` from the BOS FrameworkRefs grouped by l
 model + world, drawn tinted in `CollectObjects`; `Panels/RenderWindow.Bos.cs` builds them with `SceneBuilder.CreatePlaced` of the swap base)
 and OAR / DAR on an NPC (`Core/AnimReplacers.cs` parse + Pass / Fail / Unknown evaluation, `EditorSession.AnimReplacers`,
 `Panels/AnimReplacersView.cs` «Animations» tab added by `RecordForm`, replacers filtered by the race skeleton folder).
-v0.71.0: Claude bridge (docs/CLAUDE-BRIDGE.md; `Services/ClaudeBridge.cs` MCP over HTTP on 127.0.0.1 — JSON responses, no SSE, Origin
-checked; tool calls queued and run on the UI thread in `Pump`, `MainWindow.Wake` ends the idle wait; `Services/ClaudeTools.cs` tools;
-`Panels/RenderWindow.Claude.cs` capture (with overlay = back buffer cut to the view, `ServeWindowShots` in Program), notes, K marks,
-edits through `Commit`; `Panels/ClaudeWindow.cs`). Off by default (`Settings.ClaudeBridge`); Claude never saves.
-v0.72.0: proposals (`Panels/RenderWindow.Proposals.cs`: objects moved live but unrecorded, `RenderOptions.Proposed` tint, Enter / Backspace or
-the Claude window decide, one Commit on apply), «Ask Claude» (`Services/ClaudeChat.cs`: `claude -p` with a temp `--mcp-config`,
-`--strict-mcp-config --allowedTools mcp__stb-editor`, stream-json read for text / tool_use / session_id, `--resume`), tools get_journal,
-run_script (`ClaudeBridge.OnUi` brings worker results back to the UI thread), proposal_status.
+v0.71.0 introduced the Claude-branded MCP bridge; current unreleased names are AI/MCP
+(`docs/AI-BRIDGE.md`, `Services/AiBridge.cs` / `AiTools.cs`, `Panels/AiWindow.cs` / `RenderWindow.Ai.cs`).
+HTTP listens on 127.0.0.1, returns JSON without SSE, checks Origin, queues tool calls on the UI thread
+in `Pump`; `MainWindow.Wake` ends idle waiting. Capture crops the back buffer (`ServeWindowShots` in Program),
+notes/K-marks and structured edits use the existing scene/Commit path. Off by default.
+v0.72.0: proposals (`Panels/RenderWindow.Proposals.cs`: objects moved live but unrecorded,
+`RenderOptions.Proposed` tint, Enter / Backspace or the AI window decide, one Commit on apply).
+Optional «Ask Claude» (`Services/ClaudeChat.cs`) launches `claude -p` with a temp `--mcp-config`,
+`--strict-mcp-config --allowedTools mcp__stb-editor`, reads stream-json text/tool_use/session_id and resumes.
+Tools get_journal, run_script (`AiBridge.OnUi` returns worker results to UI), proposal_status.
+Current script permissions and unsandboxed limits supersede historical broad no-save claims.
 v0.72.1: framework rows open their config (`Panels/ConfigFileWindow.cs`, loose path via `AssetSource.LoosePath`); OAR refs named by the
 enclosing "condition" and the submod "name" (`FrameworkIndex.ReadScan`).
 v0.72.3: navmesh overlay drawn after the blended pass (low mist cards covered it), vertices pulled toward the camera in the
@@ -293,10 +329,9 @@ Data layer diagnostics: `dotnet build src/Editor.Cli -c Release -o build/cli`, t
 - **`<CETCompat>false</CETCompat>` must stay** in Editor.App.csproj: .NET 9+ marks exes
   CET-compatible, and under MO2 the usvfs hooks then crash the process at startup (0xC0000005,
   before any managed code — no log, no crash report). Portable build: `package.ps1` → `dist\`.
-- UI look follows the STB build's in-game settings menu (STB SettingsMenu, `Mcm*.cpp`, not in this repo):
-  monochrome, white-alpha highlights, STB_FuturaCondensed/Light from the build (`Ui/Theme.cs`
-  finds them; never ship the fonts). Russian culture's U+202F digit separator is not in Futura —
-  Program sets a plain space.
+- UI: restrained STB/Untarnished character with graphite surfaces and white-alpha highlights; system
+  Segoe UI for body text/Cyrillic, optional Sovngarde headings from the user's build (`Ui/Theme.cs`).
+  Never ship those game fonts. Program keeps the plain-space digit separator.
 - Texture/mesh paths in NIFs may carry the author's build path (`skyrimhd\build\pc\data\textures\...`);
   `AssetFileSystem.TexturePath` cuts at `data\` / `\textures\` like the engine.
 - **Saving:** Mutagen alone normalises untouched records (50+ diffs in STB.esp) and drops

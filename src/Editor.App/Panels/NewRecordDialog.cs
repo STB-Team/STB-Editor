@@ -85,7 +85,7 @@ internal sealed class NewRecordDialog(EditorApp app)
         ImGui.SetNextWindowSize(new Vector2(560, 0) * (ImGui.GetFontSize() / 16f), ImGuiCond.Appearing);
 
         var open = true;
-        if (!ImGui.BeginPopupModal(PopupId, ref open, ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.AlwaysAutoResize))
+        if (!Studio.BeginPopupModal(PopupId, ref open, ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.AlwaysAutoResize))
         {
             if (!open) _open = false;
             return;

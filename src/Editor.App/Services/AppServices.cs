@@ -133,20 +133,26 @@ internal sealed class Settings
     /// <summary>Colour theme by name (<c>Theme.Palettes</c>).</summary>
     public string Theme { get; set; } = "STB";
 
+    /// <summary>Last explicitly chosen panel arrangement; custom docking remains in layout.ini.</summary>
+    public StbEditor.App.Panels.LayoutPreset Layout { get; set; }
+
     /// <summary>Record comparison: hide the rows where every column has the same value.</summary>
     public bool CompareOnlyDifferences { get; set; }
 
     /// <summary>PapyrusCompiler.exe; null: the game's "Papyrus Compiler" folder.</summary>
     public string? PapyrusCompiler { get; set; }
 
-    /// <summary>The Claude bridge (a local MCP server for Claude Code) runs; off by default.</summary>
-    public bool ClaudeBridge { get; set; }
+    /// <summary>Local MCP server for compatible clients; off by default.</summary>
+    public bool AiBridge { get; set; }
 
-    /// <summary>Port of the Claude bridge on 127.0.0.1.</summary>
-    public int ClaudeBridgePort { get; set; } = 47110;
+    /// <summary>Port of the AI bridge on 127.0.0.1.</summary>
+    public int AiBridgePort { get; set; } = 47110;
 
-    /// <summary>Claude may change things through the bridge (undoable, never saved by Claude).</summary>
-    public bool ClaudeBridgeEdits { get; set; } = true;
+    /// <summary>Allow structured undoable edits through MCP; no plugin save tool.</summary>
+    public bool AiBridgeEdits { get; set; }
+
+    /// <summary>Allow unrestricted remote C# in addition to edits. Local file/process effects are not undoable.</summary>
+    public bool AiBridgeScripts { get; set; }
 
     /// <summary>View presets saved by the user (Render Window: Preset).</summary>
     public List<StbEditor.App.Panels.ViewPreset> ViewPresets { get; set; } = [];
@@ -168,7 +174,25 @@ internal sealed class Settings
         try
         {
             if (File.Exists(AppPaths.SettingsFile))
-                return JsonSerializer.Deserialize<Settings>(File.ReadAllText(AppPaths.SettingsFile), Options) ?? new Settings();
+            {
+                var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(AppPaths.SettingsFile))!.AsObject();
+                var migrated = false;
+                foreach (var (oldName, newName) in new[]
+                {
+                    ("ClaudeBridge", nameof(AiBridge)),
+                    ("ClaudeBridgePort", nameof(AiBridgePort)),
+                    ("ClaudeBridgeEdits", nameof(AiBridgeEdits)),
+                })
+                {
+                    if (!json.ContainsKey(oldName)) continue;
+                    if (!json.ContainsKey(newName)) json[newName] = json[oldName]?.DeepClone();
+                    json.Remove(oldName);
+                    migrated = true;
+                }
+                var settings = json.Deserialize<Settings>(Options) ?? new Settings();
+                if (migrated) settings.Save();
+                return settings;
+            }
         }
         catch (Exception ex)
         {

@@ -80,7 +80,7 @@ internal sealed class ActiveFileDialog
         ImGui.SetNextWindowSize(new Vector2(640, 520) * (ImGui.GetFontSize() / 16f), ImGuiCond.Appearing);
 
         var open = true;
-        if (!ImGui.BeginPopupModal(ChooseId, ref open, ImGuiWindowFlags.NoSavedSettings))
+        if (!Studio.BeginPopupModal(ChooseId, ref open, ImGuiWindowFlags.NoSavedSettings))
         {
             if (!open) _open = false;
             return;

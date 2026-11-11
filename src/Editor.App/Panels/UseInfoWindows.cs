@@ -74,7 +74,7 @@ internal sealed class UseInfoWindows
             ImGui.SetNextWindowPos(ImGui.GetMainViewport().Pos + ImGui.GetMainViewport().Size * 0.5f + new Vector2(i % 6, i % 6) * 24, ImGuiCond.FirstUseEver, new Vector2(0.5f));
             if (entry.Focus) { ImGui.SetNextWindowFocus(); entry.Focus = false; }
             var open = true;
-            if (ImGui.Begin($"{TF($"Use Info: {name}")}###useinfo{entry.Id}", ref open, ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoDocking))
+            if (Studio.BeginWindow($"{TF($"Use Info: {name}")}###useinfo{entry.Id}", ref open, ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoDocking))
                 DrawEntry(app, session, entry);
             ImGui.End();
             if (!open) _open.RemoveAt(i--);

@@ -335,10 +335,10 @@ internal static partial class QuestEditor
                 if (ImGui.SmallButton(T("+ location alias"))) AddAlias(quest, target, QuestAlias.TypeEnum.Location, key);
                 if (row >= 0 && ImGui.SmallButton(T("remove")))
                 {
-                    var at = row;
-                    target.Apply(TF($"Remove alias {aliases[at].Name}"), copy => ((IList)RecordFields.Get(copy, ["Aliases"])!).RemoveAt(at));
+                    var id = aliases[row].ID;
+                    target.Apply(TF($"Remove alias {aliases[row].Name}"), copy => AliasScripts.Remove((Quest)copy, id));
                 }
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Objectives, conditions and scripts that use its ID are not changed"));
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Removes this alias's scripts and local script references to it; other quests, objectives and conditions are unchanged"));
             }
             for (var i = 0; i < aliases.Count; i++)
             {
@@ -353,6 +353,11 @@ internal static partial class QuestEditor
             var alias = aliases[row];
             ImGui.TextColored(Theme.TextDim, TF($"Alias ID {alias.ID} · {(alias.Type == QuestAlias.TypeEnum.Location ? T("location alias") : T("reference alias"))}"));
             FormView.DrawObject(app, alias, ["Name"], ["Aliases", row], target);
+            ImGui.SeparatorText(T("Alias scripts"));
+            ImGui.BeginDisabled(target is null);
+            ScriptsEditor.DrawAlias(app, quest, alias, (label, change) => target?.Apply(label, change));
+            ImGui.EndDisabled();
+            ImGui.Separator();
             DrawUseReport(app, quest, alias);
 
             // Fill type: the member present decides; a picked one whose field is still empty is remembered.

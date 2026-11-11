@@ -5,18 +5,19 @@ using StbEditor.Data;
 namespace StbEditor.App.Ui;
 
 /// <summary>
-/// Fonts from the player's own build: the Futura Condensed of STB / Untarnished-style UIs and
-/// Sovngarde for headings. They are not shipped with the editor (not ours to redistribute); when
-/// the build has none the editor falls back to Segoe UI.
+/// Segoe UI for long editing sessions and Cyrillic text; optional Sovngarde headings come from
+/// the player's own build. No fonts are shipped with the editor.
 /// </summary>
 internal sealed record UiFonts(string? Body, string? Header)
 {
-    private static readonly string[] BodyNames = ["STB_FuturaCondensed.ttf", "FuturaCondensed.ttf", "Futura Condensed.ttf"];
     private static readonly string[] HeaderNames = ["SovngardeBold.ttf", "Sovngarde.ttf", "SovngardeLight.ttf"];
 
     public static UiFonts Find(GameInstall? game)
     {
-        if (game is null) return new UiFonts(null, null);
+        var systemFonts = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
+        var body = new[] { "segoeui.ttf", "arial.ttf" }
+            .Select(name => Path.Combine(systemFonts, name)).FirstOrDefault(File.Exists);
+        if (game is null) return new UiFonts(body, null);
 
         var folders = new List<string>
         {
@@ -48,7 +49,7 @@ internal sealed record UiFonts(string? Body, string? Header)
             return null;
         }
 
-        return new UiFonts(FindFirst(BodyNames), FindFirst(HeaderNames));
+        return new UiFonts(body, FindFirst(HeaderNames));
     }
 }
 
@@ -57,10 +58,9 @@ internal sealed record Palette(string Name, bool Light, Vector4 Bg, Vector4 Bar,
     Vector4 Warning, Vector4 Error, Vector4 Good, Vector4 Override);
 
 /// <summary>
-/// Colour themes (View → Settings → Theme), as xEdit's styles. The default, «STB», is the
-/// monochrome Skyrim look of Untarnished UI and the STB settings menu (STB.dll McmUI):
-/// near-black panels, light grey labels with white values, rows and buttons lit by translucent
-/// white, hairline white separators, square corners. The others are built from a palette.
+/// Colour themes (View → Settings → Theme), as xEdit's styles. The default, «STB», is a
+/// neutral studio workspace: layered graphite surfaces, readable text and restrained white
+/// highlights. The other themes retain their individual palettes.
 /// </summary>
 internal static class Theme
 {
@@ -72,6 +72,12 @@ internal static class Theme
     public static Vector4 Good { get; private set; }
     public static Vector4 Override { get; private set; }
     public static Vector4 ButtonActive { get; private set; }
+    public static Vector4 SurfaceSelected { get; private set; }
+    public static Vector4 SurfaceHover { get; private set; }
+    public static Vector4 ControlBorder { get; private set; }
+    public static Vector4 ControlSelectedBorder { get; private set; }
+    public static Vector4 EdgeLight { get; private set; }
+    public static Vector4 Shadow { get; private set; }
     public static bool IsLight { get; private set; }
     public static string Current { get; private set; } = "STB";
 
@@ -97,7 +103,7 @@ internal static class Theme
     /// <summary>Every theme, in the order the settings list them; the first is the default.</summary>
     public static readonly Palette[] Palettes =
     [
-        Dark("STB", (10, 10, 12), (6, 6, 7), (214, 214, 214), (150, 150, 152), (235, 235, 235), (255, 255, 255)),
+        Dark("STB", (32, 34, 38), (24, 26, 30), (232, 234, 237), (166, 172, 181), (238, 241, 245), (255, 255, 255)),
         Dark("Windows Dark", (32, 32, 32), (24, 24, 24), (232, 232, 232), (150, 150, 150), (96, 172, 255), (0, 120, 215)),
         Dark("Carbon", (28, 28, 28), (17, 17, 17), (222, 222, 222), (140, 140, 140), (255, 160, 60), (230, 125, 20)),
         Dark("Charcoal Dark Slate", (38, 43, 48), (29, 33, 37), (216, 223, 229), (140, 150, 158), (100, 210, 200), (55, 145, 150)),
@@ -119,24 +125,31 @@ internal static class Theme
     {
         var style = ImGui.GetStyle();
         style.WindowRounding = 0;
-        style.ChildRounding = 0;
-        style.FrameRounding = 3;
-        style.PopupRounding = 4;
+        style.ChildRounding = 4;
+        style.FrameRounding = 4;
+        style.PopupRounding = 6;
         style.ScrollbarRounding = 2;
         style.GrabRounding = 2;
-        style.TabRounding = 0;
+        style.TabRounding = 5;
         style.WindowBorderSize = 1;
-        style.FrameBorderSize = 0;
+        style.ChildBorderSize = 1;
+        style.FrameBorderSize = 1;
         style.PopupBorderSize = 1;
-        style.TabBorderSize = 0;
-        style.WindowPadding = new Vector2(10, 8);
-        style.FramePadding = new Vector2(8, 3);
-        style.ItemSpacing = new Vector2(8, 5);
+        style.TabBorderSize = 1;
+        style.TabBarBorderSize = 1;
+        style.TabBarOverlineSize = 0;
+        style.TabMinWidthBase = 54;
+        // Keep a close slot visible and stable even on inactive docking tabs.
+        style.TabCloseButtonMinWidthSelected = -1;
+        style.TabCloseButtonMinWidthUnselected = -1;
+        style.WindowPadding = new Vector2(12, 11);
+        style.FramePadding = new Vector2(10, 5);
+        style.ItemSpacing = new Vector2(8, 7);
         style.ItemInnerSpacing = new Vector2(6, 4);
         style.IndentSpacing = 16;
-        style.ScrollbarSize = 10;
-        style.GrabMinSize = 9;
-        style.CellPadding = new Vector2(6, 2);
+        style.ScrollbarSize = 13;
+        style.GrabMinSize = 11;
+        style.CellPadding = new Vector2(8, 5);
         style.WindowTitleAlign = new Vector2(0f, 0.5f);
         style.SeparatorTextBorderSize = 1;
         style.WindowMenuButtonPosition = ImGuiDir.None;
@@ -182,61 +195,62 @@ internal static class Theme
 
         if (palette == Palettes[0]) Monochrome();
         else Colors(palette);
+        Surfaces(palette);
     }
 
     private static void Monochrome()
     {
-        ButtonActive = White(0.24f);
+        ButtonActive = Rgb(82, 88, 98);
         var c = ImGui.GetStyle().Colors;
         c[(int)ImGuiCol.Text] = Text;
-        c[(int)ImGuiCol.TextDisabled] = White(0.32f);
-        c[(int)ImGuiCol.WindowBg] = Rgb(10, 10, 12, 0.97f);
-        c[(int)ImGuiCol.ChildBg] = Rgb(0, 0, 0, 0);
-        c[(int)ImGuiCol.PopupBg] = Rgb(14, 14, 16, 0.98f);
-        c[(int)ImGuiCol.Border] = White(0.13f);
+        c[(int)ImGuiCol.TextDisabled] = TextDim;
+        c[(int)ImGuiCol.WindowBg] = Rgb(32, 34, 38);
+        c[(int)ImGuiCol.ChildBg] = Rgb(29, 31, 35);
+        c[(int)ImGuiCol.PopupBg] = Rgb(40, 43, 49);
+        c[(int)ImGuiCol.Border] = Rgb(69, 74, 83);
         c[(int)ImGuiCol.BorderShadow] = Rgb(0, 0, 0, 0);
-        c[(int)ImGuiCol.FrameBg] = White(0.06f);
-        c[(int)ImGuiCol.FrameBgHovered] = White(0.11f);
-        c[(int)ImGuiCol.FrameBgActive] = White(0.16f);
-        c[(int)ImGuiCol.TitleBg] = Rgb(6, 6, 7);
-        c[(int)ImGuiCol.TitleBgActive] = Rgb(6, 6, 7);
-        c[(int)ImGuiCol.TitleBgCollapsed] = Rgb(6, 6, 7);
-        c[(int)ImGuiCol.MenuBarBg] = Rgb(6, 6, 7);
-        c[(int)ImGuiCol.ScrollbarBg] = Rgb(0, 0, 0, 0);
-        c[(int)ImGuiCol.ScrollbarGrab] = White(0.16f);
-        c[(int)ImGuiCol.ScrollbarGrabHovered] = White(0.30f);
-        c[(int)ImGuiCol.ScrollbarGrabActive] = White(0.55f);
+        c[(int)ImGuiCol.FrameBg] = Rgb(44, 48, 55);
+        c[(int)ImGuiCol.FrameBgHovered] = Rgb(58, 64, 73);
+        c[(int)ImGuiCol.FrameBgActive] = Rgb(71, 78, 89);
+        c[(int)ImGuiCol.TitleBg] = Rgb(24, 26, 30);
+        c[(int)ImGuiCol.TitleBgActive] = Rgb(44, 48, 55);
+        c[(int)ImGuiCol.TitleBgCollapsed] = Rgb(24, 26, 30);
+        c[(int)ImGuiCol.MenuBarBg] = Rgb(24, 26, 30);
+        c[(int)ImGuiCol.ScrollbarBg] = Rgb(25, 27, 31);
+        c[(int)ImGuiCol.ScrollbarGrab] = Rgb(76, 82, 93);
+        c[(int)ImGuiCol.ScrollbarGrabHovered] = Rgb(108, 116, 130);
+        c[(int)ImGuiCol.ScrollbarGrabActive] = Rgb(153, 162, 178);
         c[(int)ImGuiCol.CheckMark] = Accent;
-        c[(int)ImGuiCol.SliderGrab] = White(0.75f);
-        c[(int)ImGuiCol.SliderGrabActive] = White(0.95f);
-        c[(int)ImGuiCol.Button] = White(0.07f);
-        c[(int)ImGuiCol.ButtonHovered] = White(0.16f);
-        c[(int)ImGuiCol.ButtonActive] = White(0.28f);
-        c[(int)ImGuiCol.Header] = White(0.11f);
-        c[(int)ImGuiCol.HeaderHovered] = White(0.063f);
-        c[(int)ImGuiCol.HeaderActive] = White(0.16f);
-        c[(int)ImGuiCol.Separator] = White(0.20f);
-        c[(int)ImGuiCol.SeparatorHovered] = White(0.55f);
-        c[(int)ImGuiCol.SeparatorActive] = White(0.80f);
+        c[(int)ImGuiCol.SliderGrab] = Rgb(168, 177, 191);
+        c[(int)ImGuiCol.SliderGrabActive] = Accent;
+        c[(int)ImGuiCol.Button] = Rgb(49, 53, 61);
+        c[(int)ImGuiCol.ButtonHovered] = Rgb(66, 72, 83);
+        c[(int)ImGuiCol.ButtonActive] = ButtonActive;
+        c[(int)ImGuiCol.Header] = Rgb(66, 73, 85);
+        c[(int)ImGuiCol.HeaderHovered] = Rgb(79, 87, 101);
+        c[(int)ImGuiCol.HeaderActive] = Rgb(96, 106, 122);
+        c[(int)ImGuiCol.Separator] = Rgb(72, 78, 88);
+        c[(int)ImGuiCol.SeparatorHovered] = Rgb(148, 160, 180);
+        c[(int)ImGuiCol.SeparatorActive] = Accent;
         c[(int)ImGuiCol.ResizeGrip] = Rgb(0, 0, 0, 0);
         c[(int)ImGuiCol.ResizeGripHovered] = White(0.40f);
         c[(int)ImGuiCol.ResizeGripActive] = White(0.70f);
-        c[(int)ImGuiCol.Tab] = Rgb(8, 8, 10);
-        c[(int)ImGuiCol.TabHovered] = White(0.10f);
-        c[(int)ImGuiCol.TabSelected] = Rgb(18, 18, 21);
-        c[(int)ImGuiCol.TabSelectedOverline] = White(0.85f);
-        c[(int)ImGuiCol.TabDimmed] = Rgb(8, 8, 10);
-        c[(int)ImGuiCol.TabDimmedSelected] = Rgb(14, 14, 16);
-        c[(int)ImGuiCol.TabDimmedSelectedOverline] = White(0.35f);
+        c[(int)ImGuiCol.Tab] = Rgb(27, 29, 33);
+        c[(int)ImGuiCol.TabHovered] = Rgb(62, 68, 78);
+        c[(int)ImGuiCol.TabSelected] = Rgb(47, 52, 61);
+        c[(int)ImGuiCol.TabSelectedOverline] = Rgb(194, 204, 220);
+        c[(int)ImGuiCol.TabDimmed] = Rgb(25, 27, 31);
+        c[(int)ImGuiCol.TabDimmedSelected] = Rgb(38, 42, 49);
+        c[(int)ImGuiCol.TabDimmedSelectedOverline] = Rgb(107, 117, 133);
         c[(int)ImGuiCol.DockingPreview] = White(0.25f);
-        c[(int)ImGuiCol.DockingEmptyBg] = Rgb(4, 4, 5);
-        c[(int)ImGuiCol.TableHeaderBg] = White(0.05f);
-        c[(int)ImGuiCol.TableBorderStrong] = White(0.13f);
-        c[(int)ImGuiCol.TableBorderLight] = White(0.07f);
+        c[(int)ImGuiCol.DockingEmptyBg] = Rgb(22, 24, 28);
+        c[(int)ImGuiCol.TableHeaderBg] = Rgb(42, 46, 53);
+        c[(int)ImGuiCol.TableBorderStrong] = Rgb(72, 78, 88);
+        c[(int)ImGuiCol.TableBorderLight] = Rgb(49, 54, 62);
         c[(int)ImGuiCol.TableRowBg] = Rgb(0, 0, 0, 0);
-        c[(int)ImGuiCol.TableRowBgAlt] = White(0.018f);
+        c[(int)ImGuiCol.TableRowBgAlt] = White(0.035f);
         c[(int)ImGuiCol.TextSelectedBg] = White(0.25f);
-        c[(int)ImGuiCol.NavCursor] = White(0.6f);
+        c[(int)ImGuiCol.NavCursor] = Accent;
         c[(int)ImGuiCol.ModalWindowDimBg] = Rgb(0, 0, 0, 0.6f);
         c[(int)ImGuiCol.PlotHistogram] = White(0.8f);
         c[(int)ImGuiCol.DragDropTarget] = White(0.8f);
@@ -305,5 +319,41 @@ internal static class Theme
         c[(int)ImGuiCol.ModalWindowDimBg] = Rgb(0, 0, 0, p.Light ? 0.35f : 0.6f);
         c[(int)ImGuiCol.PlotHistogram] = p.Accent;
         c[(int)ImGuiCol.DragDropTarget] = p.Accent;
+    }
+
+    /// <summary>Structural surfaces are shared by every palette, not just the default theme.</summary>
+    private static void Surfaces(Palette p)
+    {
+        var white = new Vector4(1, 1, 1, 1);
+        var black = new Vector4(0, 0, 0, 1);
+        var lift = p.Light ? black : white;
+        var c = ImGui.GetStyle().Colors;
+        EdgeLight = Mix(p.Bg, white, p.Light ? 0.72f : 0.22f);
+        Shadow = Mix(p.Bar, black, p.Light ? 0.22f : 0.48f);
+        ControlBorder = Mix(p.Bg, lift, p.Light ? 0.24f : 0.23f);
+        ControlSelectedBorder = Mix(p.Bg, p.Accent, p.Light ? 0.46f : 0.40f);
+        SurfaceSelected = Mix(p.Bg, p.Accent, p.Light ? 0.14f : 0.19f);
+        SurfaceHover = Mix(p.Bg, p.Accent, p.Light ? 0.20f : 0.27f);
+        ButtonActive = Mix(p.Bg, p.Accent, p.Light ? 0.25f : 0.33f);
+        c[(int)ImGuiCol.WindowBg] = p.Bg;
+        c[(int)ImGuiCol.ChildBg] = Mix(p.Bg, p.Bar, 0.40f);
+        c[(int)ImGuiCol.PopupBg] = Mix(p.Bg, lift, p.Light ? 0.02f : 0.055f);
+        c[(int)ImGuiCol.Border] = Mix(p.Bg, lift, p.Light ? 0.20f : 0.18f);
+        c[(int)ImGuiCol.FrameBg] = p.Light ? Mix(p.Bg, white, 0.70f) : Mix(p.Bar, black, 0.10f);
+        c[(int)ImGuiCol.FrameBgHovered] = Mix(p.Bg, p.Accent, 0.12f);
+        c[(int)ImGuiCol.FrameBgActive] = SurfaceSelected;
+        c[(int)ImGuiCol.Button] = Mix(p.Bg, lift, p.Light ? 0.045f : 0.09f);
+        c[(int)ImGuiCol.ButtonHovered] = SurfaceHover;
+        c[(int)ImGuiCol.ButtonActive] = ButtonActive;
+        c[(int)ImGuiCol.TitleBg] = p.Bar;
+        c[(int)ImGuiCol.TitleBgActive] = Mix(p.Bg, lift, 0.075f);
+        c[(int)ImGuiCol.Tab] = Mix(p.Bar, lift, 0.035f);
+        c[(int)ImGuiCol.TabHovered] = SurfaceHover;
+        c[(int)ImGuiCol.TabSelected] = Mix(p.Bg, lift, p.Light ? 0.015f : 0.13f);
+        c[(int)ImGuiCol.TabSelectedOverline] = p.Accent;
+        c[(int)ImGuiCol.TabDimmed] = p.Bar;
+        c[(int)ImGuiCol.TabDimmedSelected] = Mix(p.Bg, lift, 0.065f);
+        c[(int)ImGuiCol.TabDimmedSelectedOverline] = Mix(p.Bg, p.Accent, 0.50f);
+        c[(int)ImGuiCol.TableHeaderBg] = Mix(p.Bg, lift, p.Light ? 0.055f : 0.07f);
     }
 }

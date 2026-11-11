@@ -19,7 +19,7 @@ internal sealed class PaletteWindow
         var window = app.RenderWindow;
         var palette = window.Palette;
         ImGui.SetNextWindowSize(app.Scaled(460, 480), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Object palette") + "###palette", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Object palette") + "###palette", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             var on = window.PaletteMode;
             if (on) ImGui.PushStyleColor(ImGuiCol.Button, Theme.ButtonActive);

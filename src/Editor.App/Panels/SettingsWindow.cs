@@ -18,7 +18,7 @@ internal sealed class SettingsWindow
         if (!_open) return;
         var settings = app.Settings;
         ImGui.SetNextWindowSize(app.Scaled(520, 0), ImGuiCond.Appearing);
-        if (ImGui.Begin(Title("Settings"), ref _open, ImGuiWindowFlags.NoDocking | ImGuiWindowFlags.AlwaysAutoResize))
+        if (Studio.BeginWindow(Title("Settings"), ref _open, ImGuiWindowFlags.NoDocking | ImGuiWindowFlags.AlwaysAutoResize))
         {
             ImGui.SeparatorText(T("Camera"));
             var zoom = settings.WheelZoomSpeed;
@@ -38,9 +38,9 @@ internal sealed class SettingsWindow
             var actors = settings.HighlightActors;
             if (ImGui.Checkbox(T("Tint NPCs and creatures so they are easy to find"), ref actors)) app.RenderWindow.SetHighlightActors(app, actors);
 
-            ImGui.SeparatorText("Claude");
-            ClaudeWindow.DrawSwitches(app);
-            if (ImGui.SmallButton(T("Claude window..."))) app.ClaudeWindow.Show();
+            ImGui.SeparatorText(T("AI / MCP"));
+            AiWindow.DrawSwitches(app);
+            if (ImGui.SmallButton(T("AI / MCP window..."))) app.AiWindow.Show();
 
             ImGui.SeparatorText(T("Performance"));
             ImGui.SetNextItemWidth(ImGui.GetFontSize() * 12);

@@ -54,7 +54,7 @@ internal sealed class FindTextWindow
         }
         if (!_open || app.Session is not { } session) return;
         ImGui.SetNextWindowSize(app.Scaled(900, 560), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Find text") + "###findtext", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Find text") + "###findtext", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             ImGui.SetNextItemWidth(ImGui.GetFontSize() * 18);
             var enter = ImGui.InputTextWithHint("##query", T("Text to find"), ref _query, 256, ImGuiInputTextFlags.EnterReturnsTrue);

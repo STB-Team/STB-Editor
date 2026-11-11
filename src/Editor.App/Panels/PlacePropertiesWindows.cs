@@ -78,7 +78,7 @@ internal sealed class PlacePropertiesWindows
             if (focus) { ImGui.SetNextWindowFocus(); _open[i] = (id, key, false); }
             var open = true;
             var title = record?.Signature == "WRLD" ? TF($"Worldspace: {record.EditorId}") : TF($"Cell: {record?.EditorId ?? session.Workspace.FormIdText(key)}");
-            if (ImGui.Begin($"{title}###place{id}", ref open, ImGuiWindowFlags.NoSavedSettings))
+            if (Studio.BeginWindow($"{title}###place{id}", ref open, ImGuiWindowFlags.NoSavedSettings))
                 DrawPlace(app, key);
             ImGui.End();
             if (!open) _open.RemoveAt(i--);

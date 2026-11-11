@@ -84,7 +84,7 @@ internal sealed class LeveledMergeWindow
         }
         if (!_open || app.Session is not { } session) return;
         ImGui.SetNextWindowSize(app.Scaled(960, 560), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Merged patch") + "###levelmerge", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Merged patch") + "###levelmerge", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             ImGui.TextWrapped(T("When several plugins change one leveled list, container, NPC, outfit or form list, only the last one counts in the game. Merging keeps each plugin's change, item by item: for every item (an entry, a faction, a spell, a package…) the entries of the last plugin that changed it win. Check the additions and removals: a plugin may have left something out on purpose."));
             foreach (var (label, signatures) in Kinds)

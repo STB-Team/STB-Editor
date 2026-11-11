@@ -160,7 +160,7 @@ internal sealed class DataDialog
         ImGui.SetNextWindowSize(new Vector2(720, 0) * (ImGui.GetFontSize() / 16f), ImGuiCond.Appearing);
 
         var open = true;
-        if (!ImGui.BeginPopupModal(PopupId, ref open, ImGuiWindowFlags.NoSavedSettings))
+        if (!Studio.BeginPopupModal(PopupId, ref open, ImGuiWindowFlags.NoSavedSettings))
         {
             if (_visible && !open) _visible = false;
             return;

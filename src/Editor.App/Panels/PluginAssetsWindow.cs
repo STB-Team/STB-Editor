@@ -60,7 +60,7 @@ internal sealed class PluginAssetsWindow
         }
         if (!_open || app.Session is not { } session) return;
         ImGui.SetNextWindowSize(app.Scaled(900, 560), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(T("Plugin assets") + "###pluginassets", ref _open, ImGuiWindowFlags.NoSavedSettings))
+        if (Studio.BeginWindow(T("Plugin assets") + "###pluginassets", ref _open, ImGuiWindowFlags.NoSavedSettings))
         {
             ImGui.SetNextItemWidth(ImGui.GetFontSize() * 16);
             if (ImGui.BeginCombo("##assetplugin", _plugin.Length > 0 ? _plugin : T("(plugin)")))
