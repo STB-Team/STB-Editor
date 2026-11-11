@@ -3,7 +3,7 @@
 An optional local MCP server connects a **compatible MCP client** to the running editor.
 The client chooses the model: the bridge does not depend on Claude or require a model provider's API key.
 A model alone cannot connect without an MCP client or adapter.
-The generalized names and permissions are **Unreleased**, after 0.76.0.
+The generalized names and permissions are available from version **0.77.0**.
 
 **Off by default.** Open **View → AI / MCP**; settings are under **View → Settings → AI / MCP**.
 Direct edits are disabled separately; running C# requires a third, more dangerous permission.

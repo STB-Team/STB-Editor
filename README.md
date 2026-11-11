@@ -13,7 +13,7 @@ Launching through MO2 is optional: the editor reads its profile directly and sav
 
 ## Current capabilities
 
-Current code: 0.76.0 + **Unreleased** (workspace shell, alias scripts, collision fixes and AI/MCP).
+Current version: **0.77.0** (workspace shell, alias scripts, collision fixes and AI/MCP).
 These are implemented capabilities, not a claim that all game data has been exhaustively tested or
 that every Creation Kit or xEdit operation has an equivalent.
 
@@ -22,7 +22,7 @@ that every Creation Kit or xEdit operation has an equivalent.
 | Data and interface | MO2 / Data load orders, game-consistent indices, BSA and loose assets, record catalog, Object Window, Cell View and its object list, Inspector, Load Order, English and Russian UI, F1 help |
 | 3D view | NIF models, interiors, exteriors with landscape and water, cell and point lighting, click selection, CK-style camera, exterior streaming, particles and animated effects, NPCs and creatures with outfits and FaceGen in bind pose |
 | Placement | Active-file saving, undo/redo, 3D thumbnails, reference flags, enable parent, ownership, locks, teleport and linked references |
-| Records | Forms and fields, creation and duplication, comparison, Use Info, conditions, scripts and properties, quests, dialogue, scenes, AI packages, Papyrus and fragment compilation; alias scripts are Unreleased |
+| Records | Forms and fields, creation and duplication, comparison, Use Info, conditions, quest and alias scripts and properties, quests, dialogue, scenes, AI packages, Papyrus and fragment compilation |
 | World editing | New cells and worldspaces, existing header properties, height and texture brushes, vertex colors, heightmaps and region boundaries |
 | Navmesh | Display, selection, movement, deletion, triangle creation, flags, Finalize (doors, links and NAVI), per-cell generation |
 
@@ -78,7 +78,7 @@ Settings, catalog cache, logs and backups live in `%LOCALAPPDATA%\STBEditor`.
 
 ## Interface
 
-Screenshots show the current Unreleased UI with English controls and the STB mod profile.
+Screenshots show the 0.77.0 interface, captured before release tagging, with English controls and the STB mod profile.
 Record names retain the installed game's language; assets and appearance depend on the installation.
 
 ![World workspace](docs/images/editor-world.png)

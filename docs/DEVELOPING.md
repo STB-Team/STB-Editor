@@ -204,7 +204,7 @@ hidden object groups; neither should wait indefinitely for deliberately unloaded
 
 Convert BMP to PNG with System.Drawing or another converter.
 
-Recorded Unreleased QA run, 2026-11-11: Skyrim SE 1.5.97, STB profile, Windows 11 x64.
+Recorded pre-0.77.0 QA run, 2026-11-11: Skyrim SE 1.5.97, STB profile, Windows 11 x64.
 - 65 main windowed scenarios; failures found were fixed and checked separately. Additional checks:
   Move gizmo and delta patch with added/deleted/changed records and undo.
 - 2566 fields: 0 unexpected differences, 0 Set errors; 98 known format limitations.

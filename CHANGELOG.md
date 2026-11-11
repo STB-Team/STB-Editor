@@ -2,7 +2,7 @@
 
 Each `## <version>` section is the release description on GitHub (see the Release section of `docs/DEVELOPING.md`).
 
-## Unreleased
+## 0.77.0
 
 - New workspace shell: **World**, **Records** and **Classic** layouts, quick save,
   undo/redo, search and active-file controls. Startup preserves the user's layout.

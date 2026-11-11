@@ -14,7 +14,7 @@ When height/width is insufficient, the same commands collapse into **Tools / Dis
 the entire scene area: otherwise the viewport stops drawing and its models cannot finish loading.
 In the Records layout, Preview is a tab beside Inspector rather than a bottom dock; the renderer/mesh cache remains shared.
 
-This describes the current code, including the Unreleased shell and Bepu update after 0.76.0,
+This describes version 0.77.0, including the workspace shell and Bepu update,
 not verification of every game model.
 Through [AI/MCP](AI-BRIDGE.md), compatible clients can access the same viewport/camera and add annotations;
 the bridge does not add a game renderer and is not an SKSE live link.
