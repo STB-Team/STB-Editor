@@ -1,4 +1,4 @@
-"""Interface translation helper for STB Editor (see docs/DEVELOPING.md, "Перевод интерфейса").
+"""Interface translation helper for STB Editor (see docs/DEVELOPING.md, "UI translation").
 
     python tools/loc.py missing            keys used in src/Editor.App that src/Editor.App/Ui/LangRu.cs lacks
     python tools/loc.py keys               every key (T("..."), TF($"...") composite formats, label tables)

@@ -1,972 +1,944 @@
 # Changelog
 
-Each `## <version>` section is the release description on GitHub (see `docs/DEVELOPING.md`, «Релиз»).
+Each `## <version>` section is the release description on GitHub (see the Release section of `docs/DEVELOPING.md`).
 
 ## Unreleased
 
-- Новая рабочая оболочка: раскладки **«Мир»**, **«Записи»**, **«Классическая»**, быстрые сохранение,
-  отмена/повтор, поиск и активный файл. Пользовательская раскладка не заменяется при запуске.
-- В «Мире» каталог объектов снизу; в «Записях» формы и сравнения докируются вкладками. Открытые документы,
-  сцена, выделение и undo сохраняются при переключении; окна можно отстыковать.
-- Панель рендера разделена на инструменты, привязки, отображение, камеру и пресеты. Все прежние действия
-  и клавиши сохранены; второстепенные параметры — в меню, подробная диагностика включается отдельно.
-- Segoe UI для основного текста, графитовая STB-тема, адаптивный каталог с карточками и фильтрами;
-  узкая панель ячеек переключает списки вкладками. Остальные темы, RU/EN и масштаб сохранены.
-- Поиск форм хранит ввод по полному ImGui ID: одинаковые поля в Инспекторе и отдельной форме больше
-  не перехватывают ввод друг друга. Исключения в режиме снимка завершают процесс без MessageBox.
-- `--layout world|records|classic`, `--autotest-layout` — проверка смены раскладок с несохранённой правкой,
-  открытыми формой и сравнением, докированием и undo/redo, без записи плагина.
-- Второй проход оформления: многослойные поверхности, кромки и состояния кнопок, выделенные docking-вкладки,
-  двухуровневая шапка и секции инструментов во всех темах, включая Charcoal Dark Slate.
-  Формы получили карточку записи, меню действий и боковую навигацию по разделам (в узком Инспекторе — выпадающую).
-- Исправлено повреждение памяти при построении коллизии модели/миниатюры: Bepu 2.4 мог зациклить обход грани
-  и выйти за пределы unmanaged-буфера. Закреплена опубликованная `2.5.0-beta.33` с исправленным обходом;
-  коллизии и Havok сохранены. `stbedit-cli collisiontest` проверяет рёбра, габариты и инерцию, в том числе
-  на публичном проблемном облаке точек.
-- На высоком масштабе/в низком dock инструменты рендера сворачиваются в меню, чтобы не вытеснять сцену
-  и не останавливать streaming. `--inspector-tab` сначала ищет точный ID раздела:
-  `Dialogue` открывает диалоги, а не условия диалогов.
-- По отзыву тестера: «Записи» — каталог шириной 38 %, дерево типов видно на обычной ширине,
-  «Просмотр» второй вкладкой рядом с «Инспектором», без нижней полосы. Центральный dock обновляется
-  после загрузки сохранённой раскладки; формы и сравнения больше не открываются сжатыми.
-- Читаемые размеры форм и старых плавающих dock-групп; увеличенные зоны закрытия окон, вкладок и диалогов
-  (24 px при 100 %). Кнопки имеют цельную скруглённую рамку вместо контрастных кромок и полос.
-- Скрипты алиасов квеста доступны прямо в свойствах выбранного алиаса, через общий редактор скриптов:
-  прикрепление/удаление, исходник, автозаполнение, свойства всех типов, массивы и ссылки на алиасы.
-  Привязка по FormKey квеста и ID алиаса, не позиции в списке; при удалении алиаса очищаются его локальные VMAD-ссылки.
-  `--autotest-aliasscripts <scratch-dir> [quest EditorID]` — свойства, undo/redo, roundtrip и сохранение/перезагрузка вне игры.
-- Мост обобщён в **AI / MCP**: локальный HTTP endpoint и JSON-конфигурация — для любого совместимого
-  MCP-клиента, независимо от модели. Снимки/камера, несохранённый документ, FormKey, undo и предложения
-  остаются инструментами редактора; Claude Code — отдельный необязательный свёрнутый launcher.
-- Раздельные `AiBridge`, `AiBridgeEdits`, `AiBridgeScripts` (по умолчанию false); старые настройки моста
-  переносятся без наследования разрешения C#. `run_script` — **не sandbox**: требует прямых правок и
-  отдельного opt-in, может писать файлы/запускать процессы; внешние эффекты не отменяются через undo.
-  У структурированных инструментов нет save, но общей гарантии «AI не пишет файлы» нет.
-- Документация сведена к текущему коду: [архитектура/приоритеты](docs/PLAN.md), оставшиеся пробелы CK/xEdit,
-  реализованные Papyrus и скрипты алиасов; исходный бинарный разбор помечен историческим.
-  [docs/AI-BRIDGE.md](docs/AI-BRIDGE.md) заменяет прежнюю Claude-специфичную инструкцию.
-- Расширенная проверка выявила пропуск подтверждения новых мастеров при нулевом `LossyRecords`:
-  теперь такое сохранение всегда ждёт согласия. Подтверждение только мастеров не отключает будущие
-  предупреждения нормализации; `--autotest-savecheck` сверяет неизменность оригинала и копии.
-- Shift-рамка имеет приоритет над gizmo/Alt-orbit. Проверки рамки ждут реального press/release и
-  сверяют точный выбор без правок; проверка расстановки больше не принимает нулевой Move за успех.
-- Исправлены MCP ID новых рефов в ещё не загруженном плагине: канонический FormKey можно передавать
-  обратно в `select`, перемещение, удаление и предложения. Этот цикл проверяется при расстановке.
-- MCP согласовывает поддерживаемую версию протокола вместо эха произвольной версии клиента;
-  ранее выданные разрешения можно снять, не включая мост/прямые правки заново.
+- New workspace shell: **World**, **Records** and **Classic** layouts, quick save,
+  undo/redo, search and active-file controls. Startup preserves the user's layout.
+- World places the object catalog below the view; Records docks forms and comparisons as tabs. Open documents,
+  the scene, selection and undo history survive layout changes; windows can be undocked.
+- The render toolbar is divided into tools, snapping, display, camera and presets. All existing actions
+  and shortcuts remain; secondary settings move into menus, with detailed diagnostics enabled separately.
+- Segoe UI body text, a graphite STB theme and an adaptive catalog with cards and filters;
+  narrow Cell View panels switch lists with tabs. Other themes, RU/EN and UI scaling remain available.
+- Form searches retain input by full ImGui ID: identical fields in the Inspector and a separate form no longer
+  capture each other's input. Exceptions in screenshot mode terminate the process without a MessageBox.
+- `--layout world|records|classic`, `--autotest-layout`: checks layout changes with an unsaved edit,
+  an open form and comparison, docking and undo/redo, without writing the plugin.
+- Second styling pass: layered surfaces, edges and button states, highlighted docking tabs,
+  a two-level header and tool sections in every theme, including Charcoal Dark Slate.
+  Forms have a record card, action menu and section navigation sidebar (a dropdown in a narrow Inspector).
+- Fixed memory corruption while building model/thumbnail collision: Bepu 2.4 could loop through a face
+  and overrun an unmanaged buffer. Pinned the published `2.5.0-beta.33`, which fixes traversal;
+  collision and Havok remain supported. `stbedit-cli collisiontest` checks edges, bounds and inertia,
+  including the public problematic point cloud.
+- At high UI scales or in a short dock, render tools collapse into menus so they do not displace the scene
+  or stop streaming. `--inspector-tab` first looks for an exact section ID:
+  `Dialogue` opens dialogue, not dialogue conditions.
+- Tester feedback: Records gives the catalog 38% of the width, shows the type tree at normal widths,
+  and places Preview as the second tab beside Inspector, without a bottom strip. The central dock updates
+  after loading the saved layout; forms and comparisons no longer open squeezed into too little space.
+- Readable sizes for forms and older floating dock groups; larger close targets for windows, tabs and dialogs
+  (24 px at 100%). Buttons use a continuous rounded border instead of contrasting edges and strips.
+- Quest alias scripts are available directly in the selected alias's properties through the shared script editor:
+  attach/remove, source, auto-fill, properties of every type, arrays and alias references.
+  Binding uses the quest FormKey and alias ID, not its list position; deleting an alias clears its local VMAD references.
+  `--autotest-aliasscripts <scratch-dir> [quest EditorID]`: properties, undo/redo, roundtrip and save/reload outside the game.
+- The bridge is generalized as **AI / MCP**: a local HTTP endpoint and JSON configuration for any compatible
+  MCP client, regardless of model. Screenshots/camera, the unsaved document, FormKey, undo and proposals
+  remain editor tools; Claude Code is a separate, optional, collapsed launcher.
+- Separate `AiBridge`, `AiBridgeEdits` and `AiBridgeScripts` settings (false by default); old bridge settings
+  migrate without inheriting C# permission. `run_script` is **not a sandbox**: it requires direct edits and
+  a separate opt-in, can write files/run processes, and its external effects cannot be undone.
+  Structured tools have no save operation, but there is no general guarantee that AI cannot write files.
+- Repository documentation is in English and describes implemented behavior and current limitations.
+  `AGENTS.md` replaces the previous agent instructions; redundant planning documents have been removed.
+  [docs/AI-BRIDGE.md](docs/AI-BRIDGE.md) replaces the former Claude-specific guide.
+  All 11 documentation images were refreshed from the current editor and renderer.
+- Screenshot readiness excludes hidden and deleted references, matching the renderer's loading rules.
+  Headless and MCP captures no longer wait indefinitely for models deliberately excluded from rendering.
+- Extended checking exposed missing confirmation for new masters when `LossyRecords` was zero:
+  such saves now always await consent. Confirming only master changes does not disable future
+  normalization warnings; `--autotest-savecheck` checks that the original and copy remain unchanged.
+- Shift-marquee takes precedence over the gizmo/Alt-orbit. Marquee checks wait for a real press/release
+  and verify the exact selection without edits; placement checks no longer accept a zero Move as success.
+- Fixed MCP IDs for new references in a plugin not yet loaded: the canonical FormKey can be passed
+  back to `select`, movement, deletion and proposals. Placement checks cover this cycle.
+- MCP negotiates a supported protocol version instead of echoing an arbitrary client version;
+  previously granted permissions can be revoked without re-enabling the bridge/direct edits.
 
 ## 0.76.0
 
-Отзыв тестера, главная панель CK:
-- Меню **«Создать»** в окне рендера (кнопки уровня с главной панели CK): **триггер** (активатор на выбор, триггеры
-  сверху списка), **мультибаунд** куб и сфера, **плоскость** и **куб окклюзии**, **комната** (Roombound), **портал**,
-  **«Связать портал с комнатой»**, **«Отвязать портал»**, **«Соединить комнаты»**, **коллизия** — плоскость, куб и сфера,
-  **акустическое пространство** и **источник звука** (база на выбор). Базы, цвета и прочие поля — как у ванильных
-  ссылок Skyrim.esm (`stbedit-cli prims`): RoomMarker / PortalMarker / CollisionMarker / PlaneMarker, комнаты
-  постоянные, мультибаунд — RoomMarker с флагом multibound. Новый примитив охватывает выделенное, иначе встаёт туда,
-  куда смотрит центр вида; плоскости поворачиваются к камере. Слой коллизии — во вкладке «Другое» окна ссылки.
-- Акустические пространства (ASPC) можно ставить в мир.
-- Не сделано: «Join/Break Occlusion Planes» и течения воды (в Skyrim.esm нет ни одного примитива-течения, не с чего
-  взять образец).
-- Для разработчиков: `--autotest-primitives <папка>`.
+Tester feedback, CK main toolbar:
+- **Create** menu in the render window (level-editing buttons from CK's main toolbar): **trigger** (choose an activator,
+  with triggers listed first), **multibound** box and sphere, **occlusion plane** and **occlusion box**, **room** (Roombound), **portal**,
+  **Link portal to room**, **Unlink portal**, **Join rooms**, **collision** plane, box and sphere,
+  **acoustic space** and **sound emitter** (choose a base). Bases, colors and other fields match vanilla
+  references in Skyrim.esm (`stbedit-cli prims`): RoomMarker / PortalMarker / CollisionMarker / PlaneMarker; rooms
+  are persistent, and multibounds use RoomMarker with the multibound flag. A new primitive encloses the selection,
+  or appears at the center of the view if nothing is selected; planes face the camera. Collision layer is on the reference window's Other tab.
+- Acoustic spaces (ASPC) can be placed in the world.
+- Not implemented: Join/Break Occlusion Planes and water currents (Skyrim.esm has no current primitive to use
+  as a reference).
+- For developers: `--autotest-primitives <folder>`.
 
 ## 0.75.0
 
-Отзыв тестера, «ландшафт — весь спектр»:
-- Кисть ландшафта: **спад** (CK: Edit Falloff % — внутренний круг на земле показывает, где кисть в полную силу), новые
-  режимы **«Задать высоту»** (CK: Absolute Height), **«Поднять до»** / **«Опустить до»** (CK: Raise To / Lower To — не
-  дальше цели), **«Шум»**, **«Стереть»** текстуру, **«Убрать траву»** / **«Вернуть траву»**. Целевая высота — полем или
-  **Ctrl+клик** по земле. Для покраски — **макс. непрозрачность** (CK: Max Opacity).
-- Трава: видимая под кистью текстура уступает своему двойнику с той же картинкой, но без травы (или с ней), как пары
-  LTundra01 / LTundra01NoGrass, — земля выглядит так же. Если в квадранте уже 6 слоев, текстура переключается на двойника
-  во всём квадранте (об этом пишется в лог).
-- Список текстур: в скольких квадрантах загруженной земли каждая используется, флажок «Только используемые здесь»
-  (CK: столбец Used).
-- Для разработчиков: `--autotest-brushes` (с внешней `--cell`).
+Tester feedback, the full range of landscape tools:
+- Landscape brush: **falloff** (CK: Edit Falloff %; the inner ground circle shows where the brush has full strength), new
+  **Set height** (CK: Absolute Height), **Raise to** / **Lower to** (CK: Raise To / Lower To; stop at the target),
+  **Noise**, **Erase** texture, **Grass off** / **Grass on** modes. Set target height in a field or with
+  **Ctrl+click** on the ground. Painting also has **maximum opacity** (CK: Max Opacity).
+- Grass: the texture visible under the brush is replaced with its twin using the same image but without grass (or with it),
+  such as LTundra01 / LTundra01NoGrass, so the ground looks unchanged. If a quadrant already has six layers, the texture
+  switches to its twin throughout the quadrant (logged).
+- Texture list: usage count in quadrants of loaded terrain, and an Only used here checkbox
+  (CK: Used column).
+- For developers: `--autotest-brushes` (with an external `--cell`).
 
 ## 0.74.0
 
-Отзыв тестера, «нет работы с объектами»:
-- **Окно ссылки как в CK**: двойной клик по объекту в окне рендера открывает его — «Править базу», вкладка **3D-данные**
-  (позиция, поворот в градусах, масштаб; стрелки ◀ ▶ сдвигают на шаг, шаг свой у каждой группы; «Сбросить поворот»,
-  «Показать в окне»), **Флажки**, **Родитель включения**, **Владелец**, **Замок** и **Телепорт** (где есть), **Прочее**,
-  **Связанные ссылки**, **Скрипты**, **Другое** (всё остальное: activate parents, emittance, multibound, типы ссылок
-  локации, attach ref, отражения, примитив, комнаты) и **«Ссылаются сюда»** (CK: Linked From — кто связан с этой ссылкой,
-  включает её или активирует; двойной клик — перейти). Каждая правка — шаг Ctrl+Z.
-- **Флажки ссылки как в CK, по типу базы**: один и тот же бит у разных типов значит разное (0x200 — «скрыт на локальной
-  карте» у статики, «размытие движения» у подвижной статики, «тени» у света, «мёртв при старте» у актёра). Добавлены:
-  скрыт на локальной карте, недоступна (двери), открыта по умолчанию, полный LOD, отражается в авто-воде, мёртв при
-  старте, тени / не освещает воду / ландшафт / не гаснет (свет), размытие движения, на земле (контейнеры),
-  игнорируется песочницей. То же в Инспекторе.
-- Двойной клик больше не наводит камеру (это **C**) и не спрашивает про дверь сразу — «Пройти через дверь» в окне ссылки.
+Tester feedback, missing object-editing controls:
+- **CK-style reference window**: double-click an object in the render window to open it: Edit base, **3D Data** tab
+  (position, rotation in degrees, scale; ◀ ▶ arrows move by a step, each group has its own step; Reset rotation,
+  Show in view), **Flags**, **Enable Parent**, **Ownership**, **Lock** and **Teleport** (where applicable), **Extra**,
+  **Linked References**, **Scripts**, **Other** (remaining fields: activate parents, emittance, multibound, location
+  reference types, attach ref, reflections, primitive, rooms), and **Linked From** (references linked to, enabling or
+  activating this reference; double-click to go there). Each edit is a Ctrl+Z step.
+- **CK-style reference flags by base type**: the same bit means different things for different types (0x200 means
+  Hidden from local map for statics, Motion blur for movable statics, Shadows for lights, Starts dead for actors). Added:
+  hidden from local map, inaccessible (doors), open by default, full LOD, reflected by auto water, starts dead,
+  shadows / does not light water / landscape / never fades (lights), motion blur, on ground (containers),
+  ignored by sandbox. Also available in the Inspector.
+- Double-click no longer focuses the camera (use **C**) or immediately asks about a door; use Go through door in the reference window.
 
 ## 0.73.0
 
-Отзыв тестера (таблица с 7 пунктами), первая партия:
-- **Примитивы рисовались вдвое больше**: триггеры, коллизии, комнаты, порталы, мультибаунды. В XPRM лежат полные размеры
-  (портал 256 x 320 — ровно дверной проём Нордских руин, триггеры полок высотой 35 стоят через 47), а мы откладывали их
-  в обе стороны от центра.
-- **Показ навмеша выключается и в режиме правки**: раньше режим включал его заново каждый кадр.
-- **Рамка выделения**: перетаскивание левой кнопкой с пустого места или **Shift+перетаскивание** откуда угодно (в
-  интерьере под курсором всегда стена или пол) — выделяется всё, чей центр внутри; Ctrl добавляет, Alt убирает. В режиме
-  навмеша рамка выбирает треугольники (или вершины — по режиму выбора); Shift+клик по-прежнему ставит вершину.
-- **Панель навмеша из CK** — строка кнопок над видом в режиме навмеша и клавиши CK: выбор треугольников **T** / вершин
-  **V** / рёбер **G** (и «Авто», как было), вид **W** (обычный / поверх всего / только навмеш), треугольник или квад из 4
-  вершин **A**, заливка **F** и обратная заливка **I**, вода **O**, предпочтительный путь **P**, опустить на землю,
-  поворот ребра, объединить **Q**, удалить **R** / Del, снять выделение **D**, поиск треугольника **Ctrl+F**, Finalize
-  **Ctrl+F1** и **проверка пути** (клик — старт, клик — цель: кратчайший путь по загруженным навмешам, через границы
-  навмешей). **F теперь заливка, как в CK** — «на землю» осталась кнопкой.
-- Для разработчиков: `--autotest-marquee [nav]`, `--autotest-navtools`, `stbedit-cli prims`.
+Tester feedback (a seven-item table), first batch:
+- **Primitives were drawn at twice their size**: triggers, collision, rooms, portals and multibounds. XPRM stores full
+  dimensions (a 256 x 320 portal exactly fits a Nordic ruin doorway; shelf triggers 35 high are spaced 47 apart),
+  but we extended those dimensions in both directions from the center.
+- **Navmesh display can be disabled while editing**: editing mode previously re-enabled it every frame.
+- **Marquee selection**: left-drag from empty space or **Shift+drag** from anywhere (interiors always have a wall or floor
+  under the cursor) selects everything whose center is inside; Ctrl adds and Alt removes. In navmesh mode the marquee
+  selects triangles (or vertices, depending on selection mode); Shift+click still places a vertex.
+- **CK navmesh toolbar**: buttons above the view in navmesh mode and CK shortcuts: select triangles **T**, vertices
+  **V**, edges **G** (plus the existing Auto mode); view **W** (normal / on top / navmesh only); triangle or quad from four
+  vertices **A**; flood fill **F**, inverse fill **I**; water **O**, preferred path **P**, drop to ground,
+  rotate edge, merge **Q**, delete **R** / Del, deselect **D**, find triangle **Ctrl+F**, Finalize
+  **Ctrl+F1**, and **path test** (click the start, then the destination: shortest path through loaded navmeshes, across
+  navmesh boundaries). **F now means flood fill, as in CK**; drop to ground remains a button.
+- For developers: `--autotest-marquee [nav]`, `--autotest-navtools`, `stbedit-cli prims`.
 
 ## 0.72.4
 
-- Покраска ландшафта больше не сдвигает нормали ячейки: пока высоты не менялись, нормали пишутся обратно байт в байт.
-  Раньше они нормализовались и кодировались заново и съезжали на шаг (~0,4°), что давало световой шов с соседями, не
-  попавшими в плагин.
-- Для разработчиков: `stbedit-cli landseam` (что даёт шов на земле у точки из игры) и `landseamfix` (патч-плагин,
-  выравнивающий смешивание текстур в вершинах на общих краях четырёх ячеек у угла).
+- Landscape painting no longer shifts cell normals: unless heights change, normals are written back byte-for-byte.
+  Previously they were normalized and re-encoded, moving by one quantization step (~0.4°) and creating lighting seams
+  against neighboring cells not included in the plugin.
+- For developers: `stbedit-cli landseam` (what causes a terrain seam at an in-game point) and `landseamfix` (a patch plugin
+  aligning texture blending at vertices along the shared edges of four cells meeting at a corner).
 
 ## 0.72.3
 
-- Навмеш больше не пропадает «под текстурой»: он рисовался до прозрачных объектов, и низкий туман (FXMistLow…, ~40
-  единиц над полом — например, в тюрьме Форта Греймур) ложился на него тёмными пятнами. Теперь навмеш рисуется после них.
-- Навмеш чуть подтянут к камере, а места под щебнем и коврами (до ~48 единиц) видны бледно; стены и решётки его
-  по-прежнему закрывают. Флажок «Бледно там, где скрыт» в панели «Навмеш».
-- Для разработчиков: `stbedit-cli navcover <ячейка>` — что и насколько выше навмеша накрывает его треугольники;
-  `--camera =x,y,z,yaw,pitch` — камера в мировых координатах.
+- Navmesh no longer disappears under textures: it was drawn before transparent objects, and low mist (FXMistLow…,
+  ~40 units above the floor, for example in Fort Greymoor's prison) covered it with dark patches. It now draws after them.
+- Navmesh is pulled slightly toward the camera; areas beneath rubble and rugs (up to ~48 units) remain faintly visible,
+  while walls and bars still hide it. Fade where hidden checkbox in the Navmesh panel.
+- For developers: `stbedit-cli navcover <cell>` reports what covers navmesh triangles and how far above them it is;
+  `--camera =x,y,z,yaw,pitch` sets the camera in world coordinates.
 
 ## 0.72.2
 
-- Окно рендера: инструменты правки на второй строке называются «Правка навмеша» и «Правка земли» — раньше они звались
-  так же, как переключатели показа «Навмеш» и «Земля» строкой выше, и было непонятно, зачем две кнопки. Подсказки
-  переключателей говорят, что они только показывают.
+- Render window: editing tools on the second row are named Edit navmesh and Edit landscape. Previously they shared
+  the Navmesh and Landscape names of the display toggles above them, making the duplicate buttons confusing.
+  Toggle tooltips explain that they only control visibility.
 
 ## 0.72.1
 
-- «Где используется» → «Фреймворки» и «Конфиги фреймворков»: **двойной клик открывает сам файл конфига** на нужной строке
-  (подсвечена) — с кнопками «Открыть в программе по умолчанию», «Показать в проводнике», «Копировать путь»; раньше он
-  открывал форму той же записи. В подробностях строки — «Открыть файл конфига» и «Открыть запись».
-- Строки OAR теперь говорят, что это: условие и подмод (`NOT IsActorBase — base coat of paint gesture replacers`), а не
+- Use Info → Frameworks and Framework configs: **double-click opens the config file itself** at the relevant highlighted
+  line, with Open in default application, Show in Explorer and Copy path buttons. Previously it opened the same record's
+  form. Row details include Open config file and Open record.
+- OAR rows now identify the condition and submod (`NOT IsActorBase — base coat of paint gesture replacers`), rather than
   `"pluginName": "Skyrim.esm"`.
 
 ## 0.72.0
 
-- **Claude предлагает — вы решаете.** Инструмент `propose_changes`: Claude показывает сдвиги / повороты / удаления, не
-  делая их — объекты стоят на новых местах, подсвечены фиолетовым, внизу окна рендера плашка; **Enter** применяет одним
-  шагом отмены, **Backspace** отклоняет (или кнопки в «Вид → Claude...»). Работает и когда правки Claude запрещены.
-- **«Спросить Claude» прямо в редакторе** («Вид → Claude...»): поле сообщения запускает ваш Claude Code (`claude -p`)
-  только с инструментами редактора, в окне — ответы и вызванные инструменты, разговор продолжается.
-- Новые инструменты моста: `get_journal` (лог сессии, история отмены, последний вылет), `run_script` (C#-скрипт как в
-  окне «Скрипты», правки — одним шагом), `proposal_status`.
-- Команда подключения теперь с `--scope user` (Claude Code видит редактор из любой папки).
+- **Claude proposes; you decide.** The `propose_changes` tool previews moves / rotations / deletions without committing
+  them: objects appear at their proposed positions in purple, with a banner at the bottom of the render window.
+  **Enter** applies them as one undo step; **Backspace** rejects them (or use View → Claude… buttons). Also works when Claude edits are disabled.
+- **Ask Claude directly in the editor** (View → Claude…): the message field launches your Claude Code (`claude -p`)
+  with editor tools only; the window shows replies and tool calls, and the conversation continues.
+- New bridge tools: `get_journal` (session log, undo history, last crash), `run_script` (a C# script like those in the
+  Scripts window, with edits as one step), `proposal_status`.
+- The connection command now uses `--scope user` (Claude Code sees the editor from any folder).
 
 ## 0.71.0
 
-- **Мост Claude: Claude Code работает с открытым редактором** (по умолчанию выключен: «Вид → Настройки → Claude»).
-  Редактор поднимает локальный MCP-сервер на `127.0.0.1:47110`; подключение — одной командой
-  `claude mcp add --transport http stb-editor http://127.0.0.1:47110/mcp`. 20 инструментов: снимок окна рендера (с
-  пометками, ждёт загрузки), камера, загрузка ячейки, объекты рядом и что под точкой, выделение, сдвиг / поворот / масштаб,
-  новый объект, удаление, отмена, поиск записей, все поля записи, правка поля по пути, «Где используется», конфиги
-  фреймворков, пометки поверх окна, метки пользователя. Всё, что меняет Claude, — обычные шаги Ctrl+Z, сохраняет только
-  пользователь; правки можно запретить отдельной галочкой. Это историческое описание 0.71.0;
-  текущие разрешения и ограничения unsandboxed `run_script` — [docs/AI-BRIDGE.md](docs/AI-BRIDGE.md).
-- **K** над окном рендера (с включённым мостом) ставит метку для Claude; «Вид → Claude...» — метки с заметками, пометки
-  Claude и что он делал последним.
+- **Claude bridge: Claude Code works with the open editor** (off by default: View → Settings → Claude).
+  The editor runs a local MCP server at `127.0.0.1:47110`; connect with one command:
+  `claude mcp add --transport http stb-editor http://127.0.0.1:47110/mcp`. Twenty tools: render-window screenshot
+  (with annotations, waiting for loading), camera, load cell, nearby objects and objects under a point, selection,
+  move / rotate / scale, new object, deletion, undo, record search, all record fields, edit a field by path, Use Info,
+  framework configs, viewport annotations and user marks. Claude's edits are ordinary Ctrl+Z steps; only the user saves,
+  and a separate checkbox can prohibit edits. This is the historical 0.71.0 description;
+  see [docs/AI-BRIDGE.md](docs/AI-BRIDGE.md) for current permissions and unsandboxed `run_script` limitations.
+- **K** over the render window (with the bridge enabled) places a mark for Claude; View → Claude… shows marks with notes,
+  Claude's annotations and its latest actions.
 
 ## 0.70.0
 
-- **Превью Base Object Swapper в окне рендера.** Кнопка «BOS» на панели: загруженные объекты, которые заменяют `_SWAP.ini`
-  сборки, показаны заменой (подсвечены бирюзовым) — по базе (`[Forms]`) и по ссылке (`[References]`), сдвинуты / повёрнуты /
-  масштабированы по свойствам строки (`posA`, `pos`, `rotA`, `rot`, `scale`; диапазон «a/b» — середина); `[Transforms]`
-  двигают сам объект. Из случайного набора показана первая замена. В углу — сколько заменено и, для выделенного, на что,
-  из какой строки, с каким шансом и есть ли условия. Выбор и правка работают с исходными объектами. Входит в пресеты вида.
-- **Какие замены анимаций OAR / DAR сработают на NPC.** Новая вкладка «Анимации» в форме NPC: все подпапки Open Animation
-  Replacer (`config.json`, поверх — `user.json`) и папки Dynamic Animation Replacer (`_conditions.txt`) его скелета, по
-  приоритету; для каждой — «да» / «нет» / «?»: условия сверяются с записью (база, раса, класс, голос, стиль боя, фракции,
-  перки, заклинания, ключевые слова, пол, ребёнок; надетое и оружие — по наряду и инвентарю), «?» — часть условий проверит
-  только игра (оружие в руках, погода, бой, случайность…). «да, играет» — первая подходящая без «?» выше; подсказка
-  строки показывает каждое условие. На Лидии: 512 замен для скелета персонажа, 9 точно подходят, 132 нет.
-- Формы BOS вида `80F~Plugin.esp` (без `0x`) теперь распознаются.
-- `--bos` включает превью для снимков; `--autotest-frameworks <NPC>` пишет и анимации.
+- **Base Object Swapper preview in the render window.** The BOS toolbar button shows loaded objects replaced by the
+  mod setup's `_SWAP.ini` rules as their replacements (tinted teal), by base (`[Forms]`) and reference (`[References]`),
+  moved / rotated / scaled according to row properties (`posA`, `pos`, `rotA`, `rot`, `scale`; the midpoint for an a/b range).
+  `[Transforms]` moves the original object. Random sets show the first replacement. The corner reports how many objects
+  were replaced and, for the selection, the replacement, source row, chance and presence of conditions. Selection and editing
+  operate on the originals. Included in view presets.
+- **Which OAR / DAR animation replacements apply to an NPC.** New Animations tab in the NPC form: all Open Animation
+  Replacer subfolders (`config.json`, overridden by `user.json`) and Dynamic Animation Replacer folders (`_conditions.txt`)
+  for its skeleton, ordered by priority. Each gets yes / no / ?: conditions are evaluated against the record (base, race,
+  class, voice, combat style, factions, perks, spells, keywords, sex, child; equipment and weapons from outfit and inventory).
+  ? means some conditions require the game (drawn weapon, weather, combat, randomness…). Yes, playing marks the first match
+  with no ? above it; row tooltips show every condition. For Lydia: 512 replacements for the character skeleton, nine definite matches, 132 failures.
+- BOS forms such as `80F~Plugin.esp` (without `0x`) are now recognized.
+- `--bos` enables screenshot previews; `--autotest-frameworks <NPC>` also writes animation results.
 
 ## 0.69.0
 
-- **`1` по кругу:** первое нажатие делает выделенное полупрозрачным (50 %, видно, что под ним; объект по-прежнему
-  выбирается), второе скрывает его совсем, третье показывает обратно. `Alt+1` — показать всё. Как просил тестер.
-- **Роадмап для тестеров:** [docs/ROADMAP.md](docs/ROADMAP.md) — что уже есть, что в планах, как предлагать и присылать вылеты.
-- `--fade-picked [2]` (с `--pick`): нажать `1` на выбранном один или два раза — для проверки по скриншоту.
+- **`1` cycles visibility:** first press makes the selection translucent (50%; objects underneath are visible and the
+  object remains selectable), second hides it completely, third shows it again. `Alt+1` shows everything. Requested by a tester.
+- **Tester roadmap:** introduced a page covering available features, plans, suggestions and crash reports.
+  That redundant planning document has since been removed; current feature documentation is in README.md.
+- `--fade-picked [2]` (with `--pick`): press `1` on the selected object once or twice for screenshot checks.
 
 ## 0.68.0
 
-- **Пресеты вида.** Кнопка «Пресет» на панели окна рендера: готовые наборы — «По умолчанию», «Чистый вид (как в игре)»,
-  «Работа с навмешем», «Расстановка объектов», «Слабый ПК» — и свои: «Сохранить текущий вид» под именем, «x» удаляет.
-  В пресете — что включено на панели (маркеры, вода, земля, трава, туман, коллизия, границы, навмеш, FX, анимация,
-  подсветка NPC, выключенные), группы «Показа», режим и свет, скорость полёта, радиус сетки. Вид, с которым редактор
-  закрыли, возвращается при следующем запуске.
-- **Где камера.** В «Ячейках» сверху — «Камера: <ячейка> [x, y]» — ячейка мира, над которой сейчас камера; её строка в
-  списке подсвечена, «Следить» прокручивает к ней, когда камера перелетает, «Показать в списке» переключает мир и сбрасывает
-  фильтр. В интерьере — «Загружена: <ячейка>».
-- **Поиск объектов в мире.** «Ячейки» → «Найти объекты в мире»: по EditorID, названию или FormID базового объекта — все его
-  расстановки в выбранном мире (или в интерьерах), с ячейкой и сеткой; двойной клик загружает ячейку и выделяет объект.
-  Работает по индексу «Где используется».
-- Исправлено красное окно Dear ImGui «2 visible items with conflicting ID»: на панели окна рендера «Навмеш» и «Земля»
-  были и кнопками показа, и инструментами с одинаковым ID. В выпускных сборках такое окно больше не показывается вообще.
-- `--autotest-findplaced <текст> [мир]`.
+- **View presets.** Preset button on the render toolbar: built-in Default, Clean view (in-game), Navmesh work,
+  Object placement and Low-end PC presets, plus custom presets: Save current view under a name; x deletes one.
+  Presets store toolbar toggles (markers, water, terrain, grass, fog, collision, borders, navmesh, FX, animation,
+  NPC highlighting, disabled objects), Show groups, mode and lighting, fly speed and grid radius. The view used on
+  exit returns at the next startup.
+- **Camera location.** Cell View shows Camera: <cell> [x, y] at the top: the world cell under the camera. Its list row
+  is highlighted; Follow scrolls to it as the camera moves, and Show in list switches worldspace and clears the filter.
+  Interiors show Loaded: <cell>.
+- **Find placed objects.** Cell View → Find placed objects searches base EditorID, name or FormID for all placements in
+  the selected worldspace (or interiors), with cell and grid coordinates; double-click loads the cell and selects the object.
+  Uses the Use Info index.
+- Fixed Dear ImGui's red 2 visible items with conflicting ID window: Navmesh and Landscape display buttons and tools
+  shared IDs on the render toolbar. Release builds no longer show that window at all.
+- `--autotest-findplaced <text> [worldspace]`.
 
 ## 0.67.0
 
-- **Трава на ландшафте.** Снаружи земля покрыта травой своих текстур, как в игре: у текстуры ландшафта (LTEX) — её
-  виды травы (GRAS); сетка с шагом `iMinGrassSize` из INI (у STB 40), в каждой точке трава той текстуры, что там видна
-  сильнее, по очереди бросает плотность; разброс PositionRange, уклон MinSlope..MaxSlope, расстояние от воды, случайный
-  поворот, рост ±HeightRange, наклон по земле с FitToSlope; дальность — `fGrassStartFadeDistance` + `fGrassFadeRange`
-  (SkyrimPrefs.ini поверх Skyrim.ini). Случайные числа свои — пучки стоят не точь-в-точь как в игре, но где трава есть и
-  какая, видно. Кнопка «Трава» на панели окна рендера, число пучков — в углу. Покраска земли сразу меняет траву.
-  Альфа вершин травяных моделей — вес ветра, не прозрачность: читается как в шейдере травы игры.
-- **Скрыть выделенное: `1`**, показать скрытое обратно — **`Alt+1`** (как в CK); то же в меню «Показ», там же число
-  скрытых. Скрытые не выбираются и не сохраняются — только для удобства в окне.
-- Исправлен вылет: Инспектор с выбранной расстановкой падал, когда её ячейка выгружалась (камеру быстро увели, и окно
-  рендера подгрузило другие ячейки). Теперь он пишет, что ячейка не загружена.
+- **Landscape grass.** Exterior terrain grows its textures' grass as in the game: each landscape texture (LTEX) supplies
+  its grass types (GRAS); grid spacing uses INI `iMinGrassSize` (40 in STB). At each point, grass from the dominant texture
+  rolls density in turn; PositionRange scatter, MinSlope..MaxSlope, distance from water, random rotation,
+  height ±HeightRange and FitToSlope alignment apply. Distance uses `fGrassStartFadeDistance` + `fGrassFadeRange`
+  (SkyrimPrefs.ini overrides Skyrim.ini). Random numbers are independent, so clumps do not exactly match the game,
+  but grass coverage and types are visible. Grass toolbar button; clump count in the corner. Painting immediately updates grass.
+  Grass-model vertex alpha is wind weight, not transparency, interpreted as in the game's grass shader.
+- **Hide selected: `1`**, show hidden objects: **`Alt+1`** (as in CK). Also in Show, with a hidden count.
+  Hidden objects cannot be selected; hiding is viewport-only and is not saved.
+- Fixed an Inspector crash when the selected placement's cell unloaded (moving the camera quickly caused the render
+  window to stream other cells). It now reports that the cell is not loaded.
 
 ## 0.66.0
 
-- **Что SPID выдаст этому NPC.** На вкладке «Заклинания и перки» формы NPC (и в Инспекторе), под его собственными
-  списками, — раздел «Добавит SPID (в игре)»: каждая строка `_DISTR.ini`, чьи фильтры NPC проходит, — заклинания, потом
-  перки, потом предметы, ключевые слова, фракции, наряды, пакеты…; шанс, сама строка, мод и файл; «(уже в записи)», если
-  форма у NPC и так есть; «?» — в строке есть фильтр, который редактор не проверит (уровень от игрока, локация), NPC может
-  её и не получить. Двойной клик открывает форму. Обратное направление (кому достаётся заклинание или перк) — как было:
-  «Где используется» на нём → «Фреймворки» → клик по строке.
-- `stbedit-cli frameworks <game> <EditorID NPC>` печатает то же; `--autotest-frameworks <NPC>` открывает форму NPC.
+- **What SPID gives this NPC.** Under the NPC's own lists on the Spells and perks form tab (and in the Inspector),
+  SPID adds (in game) shows each `_DISTR.ini` row whose filters the NPC passes: spells, then perks, items, keywords,
+  factions, outfits, packages…; chance, source row, mod and file; (already in record) when the NPC already has the form.
+  ? means a filter cannot be checked by the editor (player-relative level, location), so the NPC might not receive it.
+  Double-click opens the form. The reverse direction (who receives a spell or perk) remains Use Info → Frameworks → click a row.
+- `stbedit-cli frameworks <game> <NPC EditorID>` prints the same results; `--autotest-frameworks <NPC>` opens the NPC form.
 
 ## 0.65.0
 
-- **Дерево перков «Как в игре» — само меню игры.** Вид строится из её же файлов: небосвод `Interface\INTPerkSkydome.nif`
-  (туманности, звёздные поля, картинка созвездия навыка и соседние), звёзды `INTPerkStars01.nif`, камера в центре купола с
-  углом обзора fStatsCameraFOV. Где стоят звёзды, взято из SkyrimSE.exe: дерево навыка висит на узле `PointNN` купола,
-  звезда — в (ширина / 2 − (столбец + смещение)) × fStatsStarXIncrement, (строка + смещение) × fStatsStarYIncrement по глубине,
-  fStatsStarZInitialOffset − (строка + смещение) × fStatsStarZIncrement по высоте, ширина — самый большой столбец среди узлов с
-  перком, звезда × fStatsStarScale (настройки читаются из плагинов, иначе значения exe). Поэтому верхние ряды сходятся, как в
-  игре, а большие столбцы — левее (в игре дерево зеркально редакторскому виду).
-- **Звёзды можно перетаскивать прямо по картинке созвездия** (в активном файле): звезда скользит по наклонной плоскости дерева,
-  столбец, строка и смещения пересчитываются, одно действие отмены; «Привязка к сетке» работает и здесь. Клик по-прежнему
-  берёт ранг, Shift+клик возвращает; ПКМ — осмотреться, колесо — масштаб, «Вписать» — к дереву и картинке, «Масштаб игры» —
-  угол обзора меню. Сверху — место навыка (Point / cImage) и ширина дерева.
-- Проверено на STB: звёзды Колдовства ложатся на контур врат Обливиона, Одноручного оружия — на клинок меча.
-- `stbedit-cli ls <папка> [расширение]` — файлы ассетов под папкой и откуда каждый; `nifdump … --nodes / --uvbounds`.
+- **Perk tree In-game view uses the game's menu itself.** Built from game assets: `Interface\INTPerkSkydome.nif`
+  (nebulae, star fields, the skill constellation image and neighboring constellations), `INTPerkStars01.nif` stars,
+  camera at the dome's center with fStatsCameraFOV. Star placement comes from SkyrimSE.exe: the skill tree hangs from
+  dome node `PointNN`; star position is (width / 2 − (column + offset)) × fStatsStarXIncrement horizontally,
+  (row + offset) × fStatsStarYIncrement in depth, and fStatsStarZInitialOffset − (row + offset) × fStatsStarZIncrement
+  vertically. Width is the largest column among perk nodes; star scale is fStatsStarScale (settings read from plugins,
+  otherwise executable defaults). Thus upper rows converge as in the game, and larger columns lie farther left
+  (the in-game tree mirrors the editor view).
+- **Drag stars directly over the constellation image** (with an active file): a star slides along the tree's sloped
+  plane, recalculating column, row and offsets as one undo step; Snap to grid also works here. Click still takes a rank,
+  Shift+click refunds it; RMB looks around, wheel zooms, Fit frames the tree and image, Game scale uses the menu field of view.
+  The skill slot (Point / cImage) and tree width appear above.
+- Checked on STB: Conjuration stars follow the Oblivion gate outline, and One-Handed stars follow the sword blade.
+- `stbedit-cli ls <folder> [extension]`: asset files under a folder and their sources; `nifdump … --nodes / --uvbounds`.
 
 ## 0.64.0
 
-- **Фреймворки SKSE видны в редакторе.** Редактор читает конфиги популярных фреймворков из модов сборки: SPID
+- **SKSE frameworks are visible in the editor.** Reads popular framework configs from the mod setup: SPID
   (`_DISTR.ini`), KID (`_KID.ini`), Base Object Swapper (`_SWAP.ini`), FormList Manipulator (`_FLM.ini`), Description
-  Framework (`_DESC.ini`), Sound Record Distributor (`_SRD.yaml`), Open Animation Replacer (`config.json` / `user.json`) и
-  Dynamic Animation Replacer (`_conditions.txt`). Записи в них — по EditorID, `0x123~Plugin.esp`, `Plugin.esp|123`, парам
-  pluginName / formID.
-- В «Где используется» — новая вкладка «Фреймворки»: что каждый конфиг делает с записью (SPID выдаёт NPC, KID добавляет
-  ключевое слово, BOS заменяет в мире, FLM добавляет в список, описание, звуки, условия замены анимаций), строка, мод и
-  файл. Для строк SPID и KID — **«кому достаётся»**: фильтры проверяются по NPC (EditorID, имя, ключевые слова, фракции, раса,
-  класс, голос, наряд, заклинания, перки, уровень, пол, уникальность, ребёнок) или по записям нужного типа KID; шанс
-  показывается. На STB: перк aaMZp_DamageWeaponsNPC из STB_DISTR.ini получают 8 717 NPC, ключевое слово
-  CA_WorkbenchDefault по `*Hood` — 150 доспехов.
-- В шапке формы записи, которую упоминают конфиги, — кнопка «Фреймворки: SPID, BOS… (n)».
-- World → «Конфиги фреймворков…» — все ссылки сборки (10 461 на 3 012 записей) с фильтром по фреймворку и тексту.
+  Framework (`_DESC.ini`), Sound Record Distributor (`_SRD.yaml`), Open Animation Replacer (`config.json` / `user.json`)
+  and Dynamic Animation Replacer (`_conditions.txt`). Record references use EditorID, `0x123~Plugin.esp`, `Plugin.esp|123`,
+  or pluginName / formID pairs.
+- New Frameworks tab in Use Info: what each config does to the record (SPID distribution to NPCs, KID keywords, BOS world
+  replacement, FLM list additions, descriptions, sounds, animation-replacement conditions), source line, mod and file.
+  SPID and KID rows show **who receives it**: filters check NPCs (EditorID, name, keywords, factions, race, class, voice,
+  outfit, spells, perks, level, sex, uniqueness, child) or the appropriate KID record type; chance is shown.
+  In STB: 8,717 NPCs receive perk aaMZp_DamageWeaponsNPC from STB_DISTR.ini; 150 armor records receive
+  CA_WorkbenchDefault through `*Hood`.
+- Records mentioned by configs have a Frameworks: SPID, BOS… (n) button in their form header.
+- World → Framework configs… lists all references in the setup (10,461 references to 3,012 records), filtered by framework and text.
 
 ## 0.63.0
 
-- **Дерево перков: новый вид.** Узлы — плашки с названием перка и требуемым уровнем навыка (как узлы графа диалогов),
-  стрелки идут от края до края плашек, дерево растягивается на всё окно (по ширине сильнее — деревья узкие и высокие
-  в клетках сетки). Описания перков показываются без разметки (`<font>`, `<span>`…).
-- **«Как в игре»** — проверка дерева без запуска игры: звёздное небо, перки — звёзды (взятые светятся, доступные —
-  голубые, недоступные — тусклые), линии между ними, внизу — название, ранг, описание и что нужно для следующего ранга.
-  Ползунок уровня навыка; клик берёт ранг, если к перку ведёт взятый перк (или корень) и уровня хватает, Shift+клик
-  возвращает; «Сбросить перки». Запись при этом не меняется.
-- LOD и локальные карты вычеркнуты из планов: это делают xLODGen и DynDoLOD (а локальную карту Skyrim рисует сам).
+- **New perk-tree view.** Nodes are plates showing perk names and required skill levels (like dialogue-graph nodes);
+  arrows run edge to edge, and the tree fills the window (stretching more horizontally, since grid trees are tall and narrow).
+  Perk descriptions display without markup (`<font>`, `<span>`…).
+- **In-game view** tests the tree without launching Skyrim: starry sky, perks as stars (taken stars glow, available stars
+  are blue, unavailable stars dim), connecting lines; name, rank, description and next-rank requirements below.
+  Skill-level slider; click takes a rank if a taken perk (or root) leads to it and skill is sufficient; Shift+click refunds it;
+  Reset perks. Does not change the record.
+- LOD and local-map generation were excluded from editor scope: xLODGen and DynDoLOD handle LOD, while Skyrim renders local maps itself.
 
 ## 0.62.0
 
-(Тег 0.61.0 по ошибке встал на код 0.60.0 и удалён; если на GitHub остался релиз 0.61.0 — это 0.60.0.)
+(Tag 0.61.0 accidentally pointed to 0.60.0 code and was deleted; any remaining GitHub release 0.61.0 is 0.60.0.)
 
-
-- **Показ коллизии** в окне рендера (кнопка «Коллизия» или F4; CK: F4): коллизия Havok объектов рядом с камерой линиями —
-  выпуклые части и треугольная коллизия статики и зданий (bhkCompressedMeshShape теперь читается). Удобно искать дыры
-  в коллизии и невидимые стены.
-- Коллизия ставится, как в игре: без собственного поворота корневого узла NIF (у некоторых зданий он повёрнут на 180°,
-  а дочерние узлы — обратно).
-- Почти плоские части коллизии (ткань, листы) становятся тонкими коробками: Bepu падал на таких наборах точек (это
-  могло уронить и Run Havok Sim).
-- Генерацию навмеша можно строить по коллизии (`stbedit-cli navgen … --collision`), но по умолчанию остаются рендер-меши:
-  против навмешей игры коллизия не дала выигрыша (в таверне Ривервуда она отрезала вход).
+- **Collision display** in the render window (Collision button or F4; CK: F4): nearby objects' Havok collision as lines,
+  including convex pieces and triangle collision for statics and buildings (bhkCompressedMeshShape is now read).
+  Useful for finding collision holes and invisible walls.
+- Collision is placed as in the game: without the NIF root node's own rotation (some buildings rotate it 180°,
+  then rotate child nodes back).
+- Nearly flat collision pieces (cloth, sheets) become thin boxes: Bepu crashed on such point sets,
+  which could also crash Run Havok Sim.
+- Navmesh generation can use collision (`stbedit-cli navgen … --collision`), but render meshes remain the default:
+  comparison with game navmeshes showed no improvement from collision (it cut off the entrance in Riverwood's inn).
 
 ## 0.60.0
 
-- **Run Havok Sim по настоящей коллизии.** Падающий предмет теперь — его собственная коллизия Havok из NIF: коробки,
-  сферы, капсулы, выпуклые оболочки (раздутые на их convex radius, как в Havok), списки и трансформы, MOPP — собранные
-  в одно составное тело. Вогнутое (миски, котелки, тарелки с бортиком) больше не сплошная оболочка. Если коллизия
-  предмета — треугольная сетка (так у статики и зданий) или неизвестна, он, как раньше, падает выпуклой оболочкой меша.
-  В таверне Ривервуда все шесть котелков и тарелок падают своей коллизией и ложатся на свои места с точностью
-  ±0,3–0,4 единицы (одна тарелка, поставленная внахлёст на соседнюю, — на неё же), всё успокаивается за 0,9 с.
-- `stbedit-cli nifcollision <меш или EditorID…>` — коллизия меша частями и её границы против меша.
+- **Run Havok Sim uses actual collision.** Falling objects now use their own NIF Havok collision: boxes, spheres,
+  capsules, convex hulls (expanded by their convex radius, as in Havok), lists, transforms and MOPP, assembled into
+  a compound body. Concave objects (bowls, cooking pots, rimmed plates) are no longer solid hulls. Triangle-mesh
+  collision (used by statics and buildings) or unknown collision still falls back to the render mesh's convex hull.
+  In Riverwood's inn, all six pots and plates use their own collision and settle within ±0.3–0.4 units of their
+  original positions (one plate overlapping another settles onto it); everything settles within 0.9 seconds.
+- `stbedit-cli nifcollision <mesh or EditorID…>`: mesh collision pieces and their bounds versus render-mesh bounds.
 
 ## 0.59.0
 
-- **Граф диалогов** (вкладка квеста «Dialogue» → «Граф»; CK: Dialogue Views): темы квеста узлами — название, ветка, число
-  реплик и первая из них, — стрелки там, где реплика одной темы ведёт к другой (Link To); столбцы — сколько шагов от
-  начала разговора (стартовые темы веток и темы, к которым ничего не ведёт), темы без связей — в последнем столбце.
-  Наведение показывает реплики темы, клик выбирает её, двойной клик открывает в списке для правки; ПКМ / СКМ — двигать,
-  колесо — масштаб.
+- **Dialogue graph** (quest Dialogue tab → Graph; CK: Dialogue Views): quest topics as nodes showing name, branch,
+  line count and first line; arrows represent a line's Link To another topic. Columns represent distance from
+  conversation starts (branch starting topics and topics with no incoming links); disconnected topics occupy the last column.
+  Hover shows topic lines, click selects, double-click opens the topic in the editing list; RMB / MMB pans, wheel zooms.
 
 ## 0.58.0
 
-- **Delta-патч** в окне «Сравнить с другим файлом» (xEdit: delta patch): записи, которые плагин добавляет или меняет
-  относительно другой версии файла, переносятся в активный файл как его переопределения (реплики — под их тему), одним
-  шагом Ctrl+Z. Рефы, ячейки, миры, навмеши и ландшафт пропускаются (им нужна их ячейка), удалённые записи патчем не
-  выразить — итог говорит, сколько чего. Активный файл должен быть другим плагином и грузиться после сравниваемого.
+- **Delta patch** in Compare with another file (xEdit: delta patch): records a plugin adds or changes relative to
+  another version are copied to the active file as overrides (dialogue lines under their topics), as one Ctrl+Z step.
+  References, cells, worldspaces, navmeshes and landscape are skipped (they need cell placement); deleted records cannot
+  be represented by this patch. The result reports counts. The active file must be a different plugin loaded after the compared plugin.
 
 ## 0.57.0
 
-- **Комнаты и порталы** в «Проверке и очистке» (ошибки плагина): в интерьерах, которые трогает плагин, — маркер комнаты
-  без границ, ссылка комнаты (XLRM) на то, что не комната ячейки, портал, соединяющий не комнаты (XPOD) — ошибки;
-  портал без границ и портал без данных о комнатах — предупреждения. Ячейки собираются из всех версий, как их видит
-  игра. На Skyrim.esm — 25 предупреждений и ни одной ошибки (правила, которых ванилла не держится, — взаимные ссылки
-  комнат — не проверяются). `stbedit-cli roomcheck [плагин]`.
+- **Rooms and portals** in Check and clean (plugin errors): in interiors touched by the plugin, a room marker without
+  bounds, a room link (XLRM) to something other than a room in the cell, or a portal connecting non-rooms (XPOD) is an error;
+  a portal without bounds or room data is a warning. Cells merge all versions as the game sees them. Skyrim.esm has
+  25 warnings and no errors (rules vanilla does not follow, such as reciprocal room links, are not checked).
+  `stbedit-cli roomcheck [plugin]`.
 
 ## 0.56.0
 
-- **Пресеты тинта** в редакторе лица: у слоя тинта, для которого раса задаёт пресеты, — список цветов (с образцами);
-  выбор ставит слою цвет и номер пресета, как CK, и обновляет превью головы; «(свой цвет)» — цвет, выбранный вручную.
+- **Tint presets** in the face editor: tint layers with race-defined presets offer a color list with swatches;
+  choosing one sets the layer color and preset number as CK does, and updates the head preview. (custom color) identifies a manually chosen color.
 
 ## 0.55.0
 
-- **Реплики персонажа** (World → «Реплики персонажа…»; CK: Filtered Dialogue): все реплики, которые может сказать NPC, —
-  условия на его ID, голос (и списки голосов), расу, пол, класс, фракции и ранги проверяются (с учётом шаблона: черты и
-  фракции из него), группы OR — как в игре; остальное (стадии, глобалы, места) считается выполненным. Сначала реплики,
-  где условие называет самого NPC, потом привязанные голосом, фракцией или классом; флажок — только привязанные,
-  фильтр текста, клик открывает тему. Белетор: 14 973 возможных реплики, 671 привязана к нему, первыми — его темы в
-  Вайтране.
-- **Экспорт отношений** (в окне «Экспорт данных»; CK: Export Relationship Data): все отношения (RELA) набора — родитель,
-  ребёнок, ранг, связь — в `Документы\STB Editor\Export\Relationships.txt`.
-- `stbedit-cli filtereddialogue <EditorID NPC>`.
+- **Filtered Dialogue** (World → Filtered Dialogue…; CK: Filtered Dialogue): all lines an NPC might say, checking
+  conditions on its ID, voice (including voice lists), race, sex, class, factions and ranks (including template traits
+  and factions), with game-style OR groups; other conditions (stages, globals, locations) pass. Lines naming the NPC
+  appear first, then those tied through voice, faction or class; checkbox for tied lines only, text filter, click to open
+  the topic. Belethor: 14,973 possible lines, 671 tied to him, with his Whiterun topics first.
+- **Export relationships** (Export data window; CK: Export Relationship Data): all relationships (RELA) in the setup,
+  including parent, child, rank and association, to `Documents\STB Editor\Export\Relationships.txt`.
+- `stbedit-cli filtereddialogue <NPC EditorID>`.
 
 ## 0.54.0
 
-- **Дерево процедур AI-пакета правится** (вкладка «Procedure Tree»): выбор вида ветки — составные (Sequence, Stacked,
-  Simultaneous, Random… — с подветками) и процедуры (Wander, Sit, Sleep, Travel… — все, что встречаются в пакетах набора),
-  «+ внутрь» (последней подветкой выбранной), «+ следом» (после её подветок), «Выше» / «Ниже» (вместе с подветками),
-  «Удалить» (ветку с подветками), «+ первая ветка» для пустого дерева. Счётчики подветок обновляются сами. У процедуры —
-  выбор её входных данных из входов пакета, «+ входные данные», «x». Каждое действие — один шаг Ctrl+Z; запись после
-  правки читается обратно (автотест пакета).
+- **Editable AI-package procedure tree** (Procedure Tree tab): choose branch types, including composites (Sequence,
+  Stacked, Simultaneous, Random… with children) and procedures (Wander, Sit, Sleep, Travel…; all types present in loaded
+  packages). Add child appends under the selection; Add after inserts after its subtree; Up / Down moves the subtree;
+  Delete removes it; Add first branch handles an empty tree. Child counts update automatically. Procedures offer
+  package-input selection, Add input and x. Each action is one Ctrl+Z step; the edited record is read back by the package autotest.
 
 ## 0.53.0
 
-- **Merged Patch** (File → «Merged Patch…», было «Слить левел-листы»): кроме левел-листов сливаются контейнеры (содержимое),
-  NPC (инвентарь, фракции с рангами, перки, заклинания, пакеты, ключевые слова), наряды и списки форм — галочки по видам.
-  Правило то же: для каждого элемента побеждает последний плагин, который изменил его относительно оригинала, — так
-  добавление одного плагина не теряется из-за более позднего, который этот элемент не трогал. Порядок — как у
-  победителя (важно для пакетов), добавленное — после. На этой сборке: 26 левел-листов, 35 контейнеров, 44 NPC, 3 наряда,
-  1 список форм; один шаг Ctrl+Z. Проверяйте добавления и удаления: плагин мог убрать что-то нарочно.
-- `stbedit-cli mergeplan <сигнатура> [n]` — что слияние добавит и уберёт.
+- **Merged Patch** (File → Merged Patch…, formerly Merge leveled lists): now merges containers (contents), NPCs
+  (inventory, factions with ranks, perks, spells, packages, keywords), outfits and form lists as well as leveled lists,
+  with per-type checkboxes. The rule remains: for each element, the last plugin changing it relative to the original wins,
+  so one plugin's addition survives a later plugin that leaves it untouched. Winner order is preserved (important for
+  packages), followed by additions. In this setup: 26 leveled lists, 35 containers, 44 NPCs, three outfits and one form list;
+  one Ctrl+Z step. Review additions and removals: a plugin may have removed something deliberately.
+- `stbedit-cli mergeplan <signature> [n]`: what merging adds and removes.
 
 ## 0.52.0
 
-- **Проверить навмеши** (панель Navmesh; CK: Check NavMeshes): все загруженные навмеши — углы вне вершин и повторяющиеся,
-  треугольники без площади и смотрящие вниз, рёбра трёх и более треугольников, связи с несуществующими треугольниками
-  и без обратной связи, вершины без треугольников и вершины в одной точке. Клик по проблеме выделяет треугольник или
-  вершину и наводит камеру. Ванильные таверны и Ветреный пик — чистые (одна лишняя вершина), сгенерированный навмеш —
-  без замечаний.
-- **Удалённые навмеши** в «Проверке и очистке» (новая вкладка): навмеш другого плагина, удалённый этим, роняет игру —
-  «Восстановить и опустить» возвращает его из мастера со всеми вершинами на Z −30000, как Quick Auto Clean в xEdit, одним
-  шагом Ctrl+Z. В этой сборке плагинов с удалёнными навмешами нет — на настоящих данных не проверено.
+- **Check NavMeshes** (Navmesh panel; CK: Check NavMeshes): checks all loaded navmeshes for out-of-range and repeated
+  triangle vertex indices, zero-area and downward-facing triangles, edges shared by three or more triangles, links to
+  missing triangles or without reciprocal links, unused vertices and coincident vertices. Click an issue to select its
+  triangle or vertex and focus the camera. Vanilla inns and Bleak Falls Barrow are clean apart from one unused vertex;
+  generated navmesh has no issues.
+- **Deleted navmeshes** in Check and clean (new tab): deleting another plugin's navmesh crashes the game. Restore and lower
+  restores the master copy with every vertex at Z −30000, like xEdit Quick Auto Clean, as one Ctrl+Z step.
+  This setup has no plugins with deleted navmeshes, so this was not tested against real cases.
 
 ## 0.51.0
 
-- **Упорядочить мастера** (окно мастеров; xEdit: Sort Masters): мастера активного файла встают в порядке загрузки при
-  сохранении; FormID перенумеровываются, файл пишется заново. Проверено `stbedit-cli mastersorttest` на копии плагина
-  с мастерами не по порядку: порядок исправлен, все 251 запись на месте, расхождений нет.
-- **Сменить FormID** (Object Window → правая кнопка → «Сменить FormID…», или раздел в окне «Compact FormIDs»; xEdit:
-  Change FormID): собственная запись сохранённого активного файла получает другой номер, ссылки на неё внутри файла
-  следуют за ней, FaceGen и голосовые файлы рядом переименовываются по желанию; файл бэкапится и перечитывается.
-  Плагины, которые используют этот файл, перечислены — они продолжат ссылаться на старый номер. Проверено
-  `stbedit-cli formidtest`: запись переехала, все 17 ссылок на неё обновлены, остальное байт в байт.
+- **Sort Masters** (masters window; xEdit: Sort Masters): active-file masters are sorted by load order on save;
+  FormIDs are renumbered and the file fully rewritten. Checked with `stbedit-cli mastersorttest` on a plugin copy
+  with unsorted masters: order corrected, all 251 records retained, no differences.
+- **Change FormID** (Object Window → right-click → Change FormID…, or the section in Compact FormIDs; xEdit:
+  Change FormID): assigns a new number to an own record in the saved active file; internal links follow it, optionally
+  renaming adjacent FaceGen and voice files. The file is backed up and reloaded. Dependent plugins are listed:
+  they continue referencing the old number. Checked with `stbedit-cli formidtest`: record moved, all 17 references updated,
+  everything else byte-for-byte unchanged.
 
 ## 0.50.0
 
-- **Диалоги: порядок и удаление реплик.** Реплики темы показываются в порядке их цепочки «предыдущая реплика» (PNAM) —
-  так их расставляет игра. Реплику можно перетащить на другую (встанет после неё) или сдвинуть «Выше» / «Ниже» в меню
-  правой кнопки — правится PNAM у неё и у соседей (реплики других плагинов становятся переопределениями в активном
-  файле), один шаг Ctrl+Z. «Удалить реплику» убирает новую реплику или реплику, которая есть в самом активном файле (при
-  сохранении она уходит из темы, следующая за ней цепляется к её предыдущей); реплики других плагинов не удаляются —
-  игра увидела бы их удалёнными, лучше дать такой реплике невыполнимое условие.
-- Сохранение умеет убирать реплики (INFO) из темы активного файла; проверено `stbedit-cli dialremovetest` на копии
-  плагина (ушла ровно одна реплика, остальные 507 записей — байт в байт).
+- **Dialogue line order and deletion.** Topic lines follow their Previous line (PNAM) chain, as in the game. Drag a line
+  onto another to place it afterward, or use Up / Down in the context menu: updates its and its neighbors' PNAM
+  (other plugins' lines become active-file overrides), as one Ctrl+Z step. Delete line removes a new line or one
+  belonging to the active file (removed from the topic on save, with its successor linked to its predecessor).
+  Other plugins' lines cannot be removed because the game would see them as deleted; use an impossible condition instead.
+- Saving can remove dialogue lines (INFO) from active-file topics; checked with `stbedit-cli dialremovetest` on a plugin copy
+  (exactly one line removed; the other 507 records byte-for-byte unchanged).
 
 ## 0.49.0
 
-- **Story Manager: перестановка узлов.** Узел ветки или квеста перетаскивается на другой — встаёт после него; с Ctrl на
-  событие или ветку — последним ребёнком; на событие без Ctrl — первым. В меню правой кнопки — «Выше» и «Ниже». Каждое
-  перемещение — один шаг Ctrl+Z над всеми узлами, у которых меняется родитель или предыдущий; дерево показывает и
-  несохранённые правки (отмечены «*»).
-- Общая для idle-анимаций и Story Manager правка цепочек «родитель / предыдущий» (`Core/SiblingChains.cs`).
+- **Story Manager node moves.** Drag a branch or quest node onto another to place it afterward; Ctrl-drop onto an event
+  or branch appends it as the last child; drop onto an event without Ctrl makes it the first. Context menu offers Up and Down.
+  Each move is one Ctrl+Z step covering every node whose parent or predecessor changes; the tree includes unsaved edits (marked *).
+- Shared parent / previous chain editing for idle animations and Story Manager (`Core/SiblingChains.cs`).
 
 ## 0.48.0
 
-- **Ассеты плагина** (File → «Ассеты плагина…»): все файлы, которые называют записи плагина (модели, текстуры, звуки,
-  музыка, графы поведения…), и текстуры внутри его мешей — откуда каждый берётся (свободный файл какого мода, какой
-  архив) и каких нет; фильтр «только отсутствующие», экспорт списка. На STB.esp: 9 029 файлов, 87 отсутствуют.
+- **Plugin assets** (File → Plugin assets…): every file named by plugin records (models, textures, sounds, music,
+  behavior graphs…) and textures in its meshes, showing each source (which mod's loose file or which archive) and missing
+  files; missing-only filter and list export. STB.esp: 9,029 files, 87 missing.
 
 ## 0.47.0
 
-- **Экспорт данных** (File → «Экспорт данных…»; xEdit / CK: Export): тексты плагина по видам — имена, описания, книги,
-  сообщения, квесты (имена, журнал, цели), диалоги, прочие тексты — и его игровые настройки (GMST) со значениями, каждое
-  в свой файл с табуляцией (UTF-8) в `Документы\STB Editor\Export\<плагин>`: FormID, сигнатура, EditorID, поле, текст.
-- **ModGroups** (File → «ModGroups…», как в xEdit): группы плагинов, которые идут вместе (мод и его патчи). Когда загружена
-  вся группа, фильтр конфликтов Object Window сравнивает только последнюю версию записи в группе — правки группы друг
-  поверх друга конфликтами не считаются. Группы хранятся в `Документы\STB Editor\modgroups.json`.
+- **Export data** (File → Export data…; xEdit / CK: Export): plugin text by category (names, descriptions, books,
+  messages, quests including names/journal/objectives, dialogue, other text) and game settings (GMST) with values.
+  Each category gets a tab-separated UTF-8 file in `Documents\STB Editor\Export\<plugin>`: FormID, signature, EditorID, field, text.
+- **ModGroups** (File → ModGroups…, as in xEdit): groups of plugins used together (a mod and its patches). When the
+  whole group is loaded, Object Window's conflict filter compares only the group's last version of a record;
+  overrides within the group are not counted as conflicts. Stored in `Documents\STB Editor\modgroups.json`.
 
 ## 0.46.0
 
-- **Скрипты** (File → «Скрипты…»; xEdit: Apply Script) — на C# (Roslyn, формат .csx) из папки
-  `Документы\STB Editor\Scripts`: список, правка, «Проверить» (ошибки компиляции), «Запустить», «Остановить», вывод.
-  Скрипту доступны записи набора (`Records<IWeaponGetter>()`, `Get(key)`, `Find("EditorID или FormID")`), выбор в Object
-  Window (`Selected`), список плагинов, `Print`, `Name(record)` и правки `Edit<Weapon>(record, w => …)`: правки идут в
-  активный файл одним шагом Ctrl+Z, когда скрипт закончился без ошибки; запись, которая не сохранилась бы правильно,
-  не меняется (в логе — почему). Последнее выражение скрипта выводится.
-- При первом открытии в папку кладутся примеры: NPC без голоса, урон выбранного оружия ×1,1, префикс EditorID
-  выбранных записей, сколько записей сделал каждый плагин.
+- **Scripts** (File → Scripts…; xEdit: Apply Script): C# scripts (Roslyn, .csx format) in
+  `Documents\STB Editor\Scripts`, with list, editor, Check (compile errors), Run, Stop and output.
+  Scripts can access loaded records (`Records<IWeaponGetter>()`, `Get(key)`, `Find("EditorID or FormID")`), Object Window
+  selection (`Selected`), plugin list, `Print`, `Name(record)` and edits with `Edit<Weapon>(record, w => …)`.
+  Edits reach the active file as one Ctrl+Z step after successful script completion; records that would not save correctly
+  are not changed (the log explains why). The final expression's value is printed.
+- First opening installs examples: NPCs without voices, selected weapon damage ×1.1, EditorID prefixes for selected records,
+  and record counts by originating plugin.
 
 ## 0.45.0
 
-- **Регионы** (World → «Регионы…»; CK: Region Editor): регионы открытого мира — список с цветом карты, числом областей и
-  углов; границы на ландшафте в цветах регионов. Инструмент регионов в окне рендера: клик внутри региона выбирает его
-  (при перекрытии — меньший), углы выбранного перетаскиваются по земле, Shift+клик по границе добавляет угол, Del удаляет
-  выбранный (у области остаётся не меньше трёх). «Новый регион здесь» — регион активного файла с квадратной областью в
-  ячейку посередине вида, «Добавить область здесь» — ещё одна область выбранному. Каждая правка — один шаг Ctrl+Z.
-- У выбранного региона показано, что он задаёт: погоды с шансами, название на карте, объекты, траву, звуки и музыку;
-  правятся они в форме региона. Генерации объектов и травы по региону (CK: Generate) нет.
+- **Regions** (World → Regions…; CK: Region Editor): open-worldspace regions listed with map color, area count and
+  corner count; region-colored borders follow terrain. The render-window region tool selects by clicking inside
+  (smaller region wins overlaps); drag selected corners across the ground, Shift+click a border to add a corner,
+  Del to remove the selected corner (at least three remain per area). New region here creates an active-file region
+  with a one-cell square area at the view center; Add area here adds another area to the selection. Each edit is one Ctrl+Z step.
+- Selected regions show their weather and chances, map name, objects, grass, sounds and music, editable in the region form.
+  Region-based object and grass generation (CK: Generate) is not implemented.
 
 ## 0.44.0
 
-- **Погода и время суток** в окне рендера снаружи (кнопка «Небо»; CK: небо / время суток): выбранная погода (сначала —
-  погоды климата этого мира, потом все) в заданный час — ползунок 0–24 и кнопки 6 / 9 / 12 / 18 / 21 / 0. Цвета погоды
-  для восхода, дня, заката и ночи смешиваются по времени восхода и заката из климата; солнечный свет и направление на
-  солнце (восток → юг → запад, ночью — на луну), фоновый свет из направленного окружающего света погоды, цвет и
-  дальность тумана, цвет неба за всем. «Свет по умолчанию» возвращает прежнее освещение редактора.
-- Облака, солнце на небе, осадки и image space (яркость / цветокоррекция игры) не рисуются — только свет, туман и цвет
-  неба.
+- **Weather and time of day** in exterior render views (Sky button; CK: sky / time of day): selected weather (this
+  world's climate weathers first, then all others) at a chosen hour, with a 0–24 slider and 6 / 9 / 12 / 18 / 21 / 0 buttons.
+  Sunrise/day/sunset/night weather colors blend using climate sunrise and sunset times; sunlight and sun direction
+  (east → south → west, moon direction at night), ambient light from the weather's directional ambient colors,
+  fog color/distance and background sky color. Default lighting restores the earlier editor lighting.
+- Clouds, the sun disc, precipitation and image space (game brightness / color grading) are not rendered;
+  only lighting, fog and sky color are previewed.
 
 ## 0.43.0
 
-- **Голосовые файлы** (World → «Голосовые файлы…»; CK: Voice Assets, Export Dialogue, Generate LIP): каждая реплика плагина
-  для каждого голоса, который её произносит, — путь, по которому игра ищет звук
-  (`Sound\Voice\<плагин>\<голос>\<квест>_<топик>_<FormID>_<n>`), и что из этого есть в сборке: .fuz, звук + .lip, WAV
-  без .lip, нет ничего. Голоса определяются по говорящему реплики, условиям на субъекта (GetIsID, GetIsVoiceType со
-  списками, GetIsAliasRef → уникальный актёр / созданный объект / закреплённый реф / голоса алиаса, а если никто не
-  назван — фракция или класс), диалоговым условиям квеста и сценам, где топик произносит алиас.
-- Сверено с озвучкой Skyrim.esm (`stbedit-cli voicecheck`): имена файлов совпадают в 34 285 из 34 293 случаев, голоса
-  найдены для 97 % записанных реплик; у 325 реплик говорящего по условиям не определить (CK предложил бы все голоса).
-- **Экспорт списка** — таблица через табуляцию для актёров озвучки (файл, голос, квест, топик, FormID, номер, эмоция,
-  текст, заметки, состояние).
-- **«Создать недостающие .lip»** — для каждого WAV без .lip запускается LipGenerator из CK (`Tools\LipGen\LipGenerator`,
-  нужен FonixData.cdf); стерео и не 16-битные WAV сначала сводятся в моно 16 бит (иначе LipGenerator падает). Текст
-  реплики передаётся подсказкой, если он латиницей. **«Создать .lip и упаковать .fuz»** ещё и кодирует WAV в xWMA
-  (`Tools\Audio\xwmaencode.exe`) и пишет .fuz рядом с WAV; .fuz читается штатным LIPFuzer.
+- **Voice files** (World → Voice files…; CK: Voice Assets, Export Dialogue, Generate LIP): each plugin dialogue response
+  for every voice that speaks it, with the game's expected path
+  (`Sound\Voice\<plugin>\<voice>\<quest>_<topic>_<FormID>_<n>`) and available files: .fuz, audio + .lip, WAV without .lip,
+  or nothing. Voices come from the line's speaker, subject conditions (GetIsID, GetIsVoiceType including lists,
+  GetIsAliasRef → unique actor / created object / forced reference / alias voices; faction or class if none is named),
+  quest dialogue conditions and scenes where an alias speaks the topic.
+- Compared with Skyrim.esm voice assets (`stbedit-cli voicecheck`): filenames match in 34,285 of 34,293 cases;
+  voices found for 97% of recorded lines; 325 lines have no determinable speaker from conditions (CK would offer all voices).
+- **Export list**: tab-separated table for voice actors (file, voice, quest, topic, FormID, number, emotion, text, notes, status).
+- **Generate missing .lip** runs CK LipGenerator (`Tools\LipGen\LipGenerator`, requires FonixData.cdf) for every WAV without
+  a .lip; stereo and non-16-bit WAVs are first converted to mono 16-bit (otherwise LipGenerator crashes). Latin-script
+  response text is passed as a hint. **Generate .lip and pack .fuz** also encodes WAV to xWMA
+  (`Tools\Audio\xwmaencode.exe`) and writes .fuz beside the WAV; standard LIPFuzer reads the result.
 
 ## 0.42.0
 
-- **Дерево idle-анимаций** (World → «Idle-анимации…»; CK: Gameplay → Animations): все idle по графам поведения
-  (0_Master.hkx, драугр, лошадь…) и действиям (AACT), от которых они растут; дети — в том порядке, в каком игра
-  перебирает их условия (играет первый подходящий). Клик открывает форму idle (событие, условия, флаги). Перетаскивание
-  на другой idle ставит после него (с Ctrl — последним ребёнком), на действие — первым под ним; в меню правой кнопки —
-  «Выше», «Ниже», «В idle выше», «Из родителя», «Новый idle после этого», «Новый дочерний idle». Каждое перемещение —
-  один шаг Ctrl+Z над всеми idle, у которых меняется родитель или предыдущий (RelatedIdles). Фильтр по имени и событию,
-  выбор графа.
-- `stbedit-cli idletree [глубина] [фильтр]` — дерево текстом и сводка по графам.
-- Поведенческие графы (.hkx) не разбираются: список событий графа в форме idle не подсказывается.
+- **Idle animation tree** (World → Idle animations…; CK: Gameplay → Animations): all idles grouped by behavior graph
+  (0_Master.hkx, draugr, horse…) and root action (AACT); children follow the game's condition-evaluation order
+  (the first match plays). Click opens the idle form (event, conditions, flags). Drop onto another idle to place it after
+  that idle (Ctrl makes it the last child), or onto an action to make it the first child. Context menu: Up, Down,
+  Into previous idle, Out of parent, New idle after this, New child idle. Each move is one Ctrl+Z step covering all idles
+  whose parent or predecessor changes (RelatedIdles). Name/event filter and graph selection.
+- `stbedit-cli idletree [depth] [filter]`: text tree and graph summary.
+- Behavior graphs (.hkx) are not parsed, so the idle form cannot suggest graph event names.
 
 ## 0.41.0
 
-- **Дерево перков** (форма навыка AVIF → вкладка «Дерево перков»; CK: Actor Values → Perk Tree): узлы на сетке столбцов
-  и строк со смещениями, как в игре, стрелки к узлам, куда ведёт каждый, имя перка и требуемый уровень навыка (из
-  условий перка). Перетаскивание сдвигает узел (флажок «По сетке» — ровно на столбцы и строки), Ctrl+клик по другому
-  узлу связывает или развязывает, двойной клик открывает перк; «Добавить узел» (связь от выбранного), «Удалить узел»
-  (и все связи на него), «Вписать»; ПКМ / СКМ — двигать вид, колесо — масштаб. Под деревом — поля выбранного узла
-  (перк, столбец, строка, смещения, связи) и описание перка с числом рангов. Каждая правка — один шаг Ctrl+Z.
-- Корень дерева рисуется под перками, к которым ведёт: его собственные поля столбца и строки в игровых деревьях
-  содержат мусор.
-- `stbedit-cli perktree <EditorID навыка>` — узлы дерева текстом.
+- **Perk tree** (skill AVIF form → Perk tree tab; CK: Actor Values → Perk Tree): nodes on a row/column grid with offsets,
+  as in the game; arrows to connected nodes, perk names and required skill levels (from perk conditions). Drag to move
+  a node (Snap to grid uses whole rows/columns); Ctrl+click another node toggles a connection; double-click opens the perk.
+  Add node connects from the selection, Delete node removes it and all incoming connections, Fit frames the tree;
+  RMB / MMB pans, wheel zooms. Below: selected node fields (perk, column, row, offsets, connections) and perk description
+  with rank count. Each edit is one Ctrl+Z step.
+- The root is drawn below its children: vanilla root row/column fields contain junk.
+- `stbedit-cli perktree <skill EditorID>`: text listing of tree nodes.
 
 ## 0.40.0
 
-- **Генерация навмеша** (панель Navmesh → «Сгенерировать навмеш»; CK: Generate NavMesh): проходимая поверхность
-  открытой интерьерной ячейки (снаружи — центральной ячейки) по её мешам с коллизией и ландшафту, для актёра заданного
-  размера (радиус, рост, шаг, уклон, размер вокселя — в «Настройках генерации»). Считается в фоне (Recast, библиотека
-  DotRecast), результат заменяет треугольники самого большого навмеша ячейки или становится новым навмешем активного
-  файла — один шаг Ctrl+Z, — и сразу выполняется Finalize (двери, связи с соседями, NAVI) вторым шагом.
-- В интерьере остаётся только то, что связано с дверями: столешницы, балки, верх стен и скал, дно под мостами, куда не
-  дойти, отбрасываются (флажок «Оставлять куски, не связанные с дверями» возвращает большие отдельные комнаты).
-  Снаружи остаются куски у края ячейки (их продолжают соседние) и крупные. Треугольники под водой ячейки помечаются
-  «вода». Двери и активаторы навмеш не прерывают, меши без коллизии (чёрные плоскости, ткань, лучи света) — тоже.
-- Сверено с навмешами игры (`stbedit-cli navgen`): таверна Ривервуда — 86–90 % игровых треугольников покрыто нашими,
-  83 % наших лежат на игровых; «Гарцующая кобыла» — 84 / 83 %; Ветреный пик 01/02 — 88 / 63 % и 83 / 71 % (лишнее —
-  в основном края и закутки, которые дизайнеры CK подрезают руками). Покрывающие рёбра (cover edges) не считаются.
-- Если в ячейке несколько навмешей, заменяется только самый большой — остальные нужно удалить или подрезать там, где
-  они перекрываются (итог говорит, сколько их).
+- **Navmesh generation** (Navmesh panel → Generate navmesh; CK: Generate NavMesh): walkable surfaces in the open interior
+  cell (central cell outdoors), based on collision-bearing meshes and landscape, for an actor of configurable size
+  (radius, height, step, slope, voxel size in Generation settings). Runs in the background (Recast through DotRecast).
+  Replaces the cell's largest navmesh or creates a new active-file navmesh as one Ctrl+Z step, then immediately Finalizes
+  doors, neighbor links and NAVI as a second step.
+- Interiors retain only pieces connected to doors: tabletops, beams, wall/cliff tops and unreachable bottoms under bridges
+  are discarded (Keep pieces not connected to doors restores large separate rooms). Exteriors retain pieces at cell edges
+  (continued by neighbors) and large pieces. Triangles under cell water are flagged Water. Doors, activators and meshes
+  without collision (black planes, cloth, light beams) do not obstruct generation.
+- Compared with game navmeshes (`stbedit-cli navgen`): Riverwood inn has 86–90% of game triangles covered by ours and 83%
+  of ours on game triangles; Bannered Mare 84 / 83%; Bleak Falls Barrow 01/02 88 / 63% and 83 / 71% (extras are mostly
+  edges and recesses CK designers trim manually). Cover edges are not calculated.
+- With multiple navmeshes in a cell, only the largest is replaced; others must be removed or trimmed where they overlap
+  (the result reports their count).
 
 ## 0.39.0
 
-- **Редактор лица** (форма NPC → вкладка «Appearance»; CK: Character Gen Parts, Face Morphs, Tints): части головы по
-  типам (волосы, борода, брови, глаза, шрамы, голова — из подходящих расе и полу, или «по расе»), цвет волос, цвет кожи
-  (слой тона кожи следует), вес, пресеты носа, глаз и рта, 18 ползунков лица (двойной щелчок — 0), слои тинта (вкл.,
-  цвет, сила) — и рядом **живое превью головы**: та же сборка FaceGen, что и экспорт, только в памяти (ПКМ — вращать,
-  колесо — масштаб). Ползунок показывает изменение, пока его тянут, и становится одним шагом Ctrl+Z, когда его
-  отпускают. Кнопка «Экспорт FaceGen» пишет голову для игры. Сырые поля внешности — под «Все поля внешности».
-- Набор ассетов умеет файлы в памяти (превью не пишет ничего на диск).
+- **Face editor** (NPC form → Appearance tab; CK: Character Gen Parts, Face Morphs, Tints): head parts by type (hair,
+  beard, eyebrows, eyes, scars, head; filtered by race/sex, or race default), hair color, skin color (skin-tone layer follows),
+  weight, nose/eye/mouth presets, 18 face sliders (double-click resets to zero), tint layers (enabled, color, strength),
+  and a **live head preview** using the same FaceGen builder as export, entirely in memory (RMB rotates, wheel zooms).
+  Sliders update the preview during dragging and commit one Ctrl+Z step on release. Export FaceGen writes the game head.
+  Raw appearance fields are under All appearance fields.
+- Asset storage supports in-memory files (preview writes nothing to disk).
 
 ## 0.38.0
 
-- **Run Havok Sim** (окно рендера: Alt+H или кнопка «Havok»): выделенные объекты падают с физикой (BepuPhysics) на то,
-  что вокруг, и останавливаются — а не просто опускаются на землю, как по F. Тело — выпуклая оболочка меша объекта,
-  опора — меши остальных объектов рядом и ландшафт. Мелочь, лежащая внутри падающего предмета (ингредиенты в котелке,
-  еда на тарелке), остаётся на месте и не выталкивает его; предметы, стоящие друг в друге, друг друга не расталкивают.
-  Расчёт в фоне («Havok sim…» в углу), результат — один шаг Ctrl+Z.
-- Проверено автотестом в таверне Ривервуда: шесть котелков и тарелок, приподнятых и наклонённых на 20°, ложатся обратно
-  на свои места (по высоте ±0,4 единицы, ровно); одна тарелка ложится с наклоном на соседнюю, с которой её и поставили
-  внахлёст. Ограничение: форма — выпуклая оболочка, а не коллизия Havok из NIF (вогнутое — чаша, котелок — внутрь не
-  принимает).
+- **Run Havok Sim** (render window: Alt+H or Havok button): selected objects fall with physics (BepuPhysics) onto their
+  surroundings and settle, rather than simply dropping to the ground as with F. Bodies use convex render-mesh hulls;
+  support uses nearby unselected object meshes and landscape. Small objects inside a falling object (ingredients in pots,
+  food on plates) stay in place without pushing it out; objects initially intersecting each other do not push one another.
+  Runs in the background (Havok sim… in the corner), with the result as one Ctrl+Z step.
+- Autotested in Riverwood's inn: six pots and plates, raised and tilted 20°, return to their positions (height within
+  ±0.4 units, level); one plate settles tilted onto its originally overlapping neighbor. Limitation at this release:
+  convex hulls, not NIF Havok collision, so concave bowls/pots cannot accept objects inside.
 
 ## 0.37.0
 
-- **Экспорт FaceGen** (CK: Ctrl+F4): голова NPC (`meshes\actors\character\facegendata\facegeom\<плагин>\<FormID>.nif`) и
-  текстура тинта (`textures\…\facetint\…\<FormID>.dds`) пишутся рядом с активным файлом — в Object Window правой кнопкой
-  «Экспорт FaceGen» или Ctrl+F4 по выделенным NPC, и кнопкой «Экспорт FaceGen для N NPC» в «Проверке и очистке» (для NPC
-  без FaceGen и с устаревшим). NPC берётся как есть сейчас, с несохранёнными правками; окно рендера сразу показывает новую
-  голову.
-- Как CK: части головы — расовые по умолчанию для пола, заменённые своими частями NPC того же типа, плюс дополнительные
-  части; меш каждой части с морфами из её TRI — морф расы (или Morph Race у вампиров и «поражённых»), вес (SkinnyMorph =
-  1 − вес/100), пресеты носа, глаз и губ, 18 ползунков лица (таблица направлений выведена из файлов CK), VampireMorph у
-  вампирских рас; набор текстур NPC или части (слоты TXST → NIF), цвет волос ×2 у шейдеров волос, бровей и бород, цвет
-  кожи у шрамов; тинт — цвет кожи (QNAM) и слои NPC по маскам расы.
-- Сверено с файлами CK (`stbedit-cli facegencheck`, `facegentint`, `facegenbuild`): глаза, рот и волосы совпадают до
-  тысячных, лица — в пределах 0,06 единицы (335 из 353 ванильных; NPC, собранные CK SE в модах, — 0,02–0,05), тинт —
-  в среднем 0,3–3 из 255. Структура файла как у CK (узлы, кости, BSDynamicTriShape, скин, шейдеры).
+- **FaceGen export** (CK: Ctrl+F4): writes NPC heads (`meshes\actors\character\facegendata\facegeom\<plugin>\<FormID>.nif`)
+  and tint textures (`textures\…\facetint\…\<FormID>.dds`) beside the active file. Object Window context menu → Export
+  FaceGen, Ctrl+F4 on selected NPCs, or Export FaceGen for N NPCs in Check and clean (missing/stale FaceGen).
+  Uses the NPC's current state, including unsaved edits; the render window immediately shows the new head.
+- Matches CK: race-default head parts for the sex, replaced by NPC parts of the same type, plus extra parts; each part's
+  mesh uses its TRI morphs: race morph (Morph Race for vampires and afflicted), weight (SkinnyMorph = 1 − weight/100),
+  nose/eye/lip presets, 18 face sliders (direction table derived from CK files), VampireMorph for vampire races.
+  NPC or part texture sets (TXST → NIF slots), hair color ×2 for hair/eyebrow/beard shaders, skin color for scars;
+  tint combines skin color (QNAM) and NPC layers through race masks.
+- Compared with CK files (`stbedit-cli facegencheck`, `facegentint`, `facegenbuild`): eyes, mouth and hair match to
+  thousandths; faces within 0.06 units (335 of 353 vanilla NPCs; CK SE-built mod NPCs within 0.02–0.05); tint average
+  error 0.3–3 out of 255. File structure matches CK (nodes, bones, BSDynamicTriShape, skin, shaders).
 
 ## 0.36.6
 
-- Гизмо поворота больше не показывает кольца, которые видны почти ребром (например, кольцо Z, когда камера вровень с
-  объектом): их можно было схватить, но объект не поворачивался. Поворот вокруг Z при такой камере — левой кнопкой по
-  объекту в режиме «Поворот» или правой кнопкой.
-- Правая кнопка (поворот / обзор), колесо и средняя кнопка работают и тогда, когда курсор над гизмо.
-- В режиме палитры гизмо не рисуется (щелчок по нему ставил объект).
+- Rotation gizmo hides nearly edge-on rings (for example Z when the camera is level with the object): they could be grabbed
+  but did not rotate the object. At that angle, rotate around Z with left-drag in Rotate mode or right-drag on the object.
+- RMB (rotation / look), wheel and MMB also work while the cursor is over the gizmo.
+- Palette mode hides the gizmo (clicking it placed an object).
 
 ## 0.36.5
 
-- Лог правок из 0.36.3 (`edit:` в `editor.log`) убран: он был нужен, чтобы найти улёт объекта при повороте (исправлен в 0.36.4).
+- Removed the 0.36.3 edit log (`edit:` in `editor.log`): it was used to find objects flying away during rotation (fixed in 0.36.4).
 
 ## 0.36.4
 
-- **Объект улетал при повороте мышью** (правая кнопка, или левая в режиме «Поворот»), если держать угол больше 60°:
-  центр поворота каждый кадр брался из текущей позиции объекта, а не из той, что была в начале. Погрешность округления
-  возвращалась повёрнутой и росла с каждым кадром (на 180° — вдвое), объект уходил на сотни единиц, потом в
-  бесконечность. Найдено по логу 0.36.3 (сдвиг 1,3 единицы на 180°). Теперь центр — позиция в начале поворота, а
-  поворот считается от центра, без вычитания больших мировых координат: сдвиг 0. Проверка: `stbedit-cli mathtest`
-  повторяет случай из лога (старый способ — больше 100 единиц к 90° и бесконечность, новый — 0), `--autotest-place`
-  держит поворот на 180° 60 кадров.
+- **Objects flew away during mouse rotation** (RMB, or LMB in Rotate mode) when holding an angle over 60°: each frame
+  used the object's current position as pivot instead of its drag-start position. Rounding error was rotated back and
+  grew each frame (doubling at 180°), sending objects hundreds of units away and then to infinity. Found through the
+  0.36.3 log (1.3-unit shift at 180°). The pivot now stays at the drag-start position, with rotation calculated relative
+  to it without subtracting large world coordinates: zero shift. `stbedit-cli mathtest` replays the logged case (old method:
+  over 100 units by 90°, then infinity; new: zero); `--autotest-place` holds 180° rotation for 60 frames.
 
 ## 0.36.3
 
-- Лог правок в окне рендера: каждое перетаскивание, поворот гизмо и правка полей Placement пишутся в
-  `%LOCALAPPDATA%\STBEditor\logs\editor.log` (`edit:` — чем начато, режим, шаг угла, камера, позиция и поворот до и после);
-  если поворот сдвинул одиночный объект, там же предупреждение с подробностями. Для поиска «объект улетает при повороте».
+- Render-window edit logging: each drag, gizmo rotation and Placement-field edit writes to
+  `%LOCALAPPDATA%\STBEditor\logs\editor.log` (`edit:`: initiating action, mode, angle step, camera, before/after position
+  and rotation). If rotation moves a single object's position, a detailed warning is logged too. Used to investigate objects flying away during rotation.
 
 ## 0.36.2
 
-- **Вылет на кнопке «Вращать»** в окне «Просмотр»: нажатие закрывало редактор (ImGui снимал со стека цвет, который не
-  клал). Исправлено.
-- **Объект «улетал» при перетаскивании.** В режиме «Поворот» левая кнопка на выделенном объекте его не крутила, а
-  двигала; перенос считался по пересечению луча мыши с горизонтальной плоскостью, и при камере почти вровень с объектом
-  (шахты, пещеры) десяток пикселей уносил его на сотни и тысячи единиц. Теперь левая кнопка в режиме «Поворот» (E)
-  поворачивает, как правая, в режиме «Масштаб» (R) — масштабирует; перенос по-прежнему держит объект под курсором, но не
-  быстрее четырёх путей курсора на его расстоянии (на тесте вровень: 110 единиц вместо 514 и дальше).
-- Проверено автотестом на XMarkerHeading в EmbershardMine01: поворот правой кнопкой с шагом «Угол» 15° (ровно по 15°,
-  позиция на месте), гизмо поворота с шагом (90° → 165°), левая кнопка в режимах «Поворот» и «Перенос».
+- **Preview Spin button crash**: clicking closed the editor (ImGui popped a color that had not been pushed). Fixed.
+- **Objects flew away while dragging.** LMB on selected objects in Rotate mode moved instead of rotating them; movement
+  intersected the mouse ray with a horizontal plane, so with a nearly level camera (mines, caves), ten pixels moved
+  objects hundreds or thousands of units. LMB now rotates in Rotate mode (E), like RMB, and scales in Scale mode (R).
+  Movement still keeps objects under the cursor, but is capped at four times cursor travel at object distance
+  (level-camera test: 110 units instead of 514 and beyond).
+- Autotested on XMarkerHeading in EmbershardMine01: RMB rotation with 15° Angle snapping (exact 15° steps, unchanged
+  position), snapped rotation gizmo (90° → 165°), LMB in Rotate and Move modes.
 
 ## 0.36.1
 
-- **Inspector у только что поставленного рефа** (перетащен из Object Window, вставлен, продублирован): вместо
-  «Record not found in the loaded plugins…» теперь вкладка Reference с позицией, поворотом и масштабом, свойства рефа,
-  All fields — как у загруженных рефов; правка идёт от пустой записи с базой и сохраняется вместе с рефом.
-- После сохранения Inspector читает запись заново: раньше при повторном выборе того же рефа или записи оставалась
-  версия, прочитанная до сохранения.
-- Проверено на XMarkerHeading (жалоба со старой версии: «одна белая точка и три оси, не крутится»): поставленный из
-  Object Window, он рисуется красной полупрозрачной коробкой с носом по направлению, выделяется щелчком, поворачивается
-  правой кнопкой, гизмо и полями Inspector, сохраняется с поворотом. Автотест `--autotest-place`.
+- **Inspector for newly placed references** (dragged from Object Window, pasted or duplicated): instead of Record not
+  found in the loaded plugins…, shows the Reference tab with position, rotation, scale, reference properties and All fields,
+  like loaded references. Editing starts from a blank record with its base and saves with the reference.
+- Inspector reloads records after saving: previously reselecting the same reference or record retained its pre-save version.
+- Checked on XMarkerHeading (older-version report: one white dot and three axes, cannot rotate): dragged from Object
+  Window, it renders as a red translucent box with a heading nose, selects by click, rotates through RMB, gizmo and Inspector
+  fields, and saves its rotation. `--autotest-place`.
 
 ## 0.36.0
 
-- **Story Manager** (Мир → «Story Manager...»): дерево узлов как в CK — корень, события (CraftItem, KillActorEvent,
-  ScriptEvent…), ветки и квестовые узлы в том порядке, в каком их перебирает игра (цепочка Previous Sibling), у
-  квестовых узлов — их квесты; число условий у узла; фильтр по узлу или квесту; щелчок открывает форму узла или квеста
-  (там правятся условия, флаги, родитель, порядок). В сборке STB: 663 узла, 1638 мест для квестов.
+- **Story Manager** (World → Story Manager…): CK-style tree of root, events (CraftItem, KillActorEvent, ScriptEvent…),
+  branches and quest nodes in game evaluation order (Previous Sibling chain), with quests under quest nodes; node condition
+  counts, node/quest filter, click to open the node or quest form (conditions, flags, parent and order are edited there).
+  STB setup: 663 nodes, 1,638 quest slots.
 
 ## 0.35.0
 
-- **Слои** (Мир → «Слои...»; CK: Layers): именованные группы рефов — создать из выбранных, добавить / убрать выбранные,
-  выбрать загруженные рефы слоя; галочки **«Скрыт»** (не рисуются и не выбираются) и **«Заморожен»** (видны, но клик их
-  не выбирает — удобно, чтобы не сдвинуть стены, расставляя мелочи). Слои хранит редактор
-  (`%LOCALAPPDATA%\STBEditor\layers.json`), в плагин ничего не пишется.
+- **Layers** (World → Layers…; CK: Layers): named reference groups, created from the selection; add/remove selected
+  references, select loaded layer references; **Hidden** (not drawn or selectable) and **Frozen** (visible but not selectable,
+  useful for keeping walls fixed while placing clutter). Stored by the editor in
+  `%LOCALAPPDATA%\STBEditor\layers.json`, not in the plugin.
 
 ## 0.34.0
 
-- **Палитра объектов** (Мир → «Палитра объектов...»; CK: Object Palette): набор базовых объектов (поиск по названию
-  или «+ выбранный» из окна объектов) и режим «Ставить палитрой» — каждый клик в окне рендера ставит случайный объект
-  набора со случайным поворотом, размером в заданном диапазоне, наклоном до N° и утоплением в землю; каждый — один
-  Ctrl+Z. Для камней, деревьев, мусора.
+- **Object palette** (World → Object palette…; CK: Object Palette): base-object sets (search by name or Add selected
+  from Object Window) and Place from palette mode: every render-window click places a random object with random rotation,
+  scale in a specified range, tilt up to N° and ground sinking; each placement is one Ctrl+Z step. For rocks, trees and debris.
 
 ## 0.33.0
 
-- Ландшафт: кисть **«Цвет»** (CK: Vertex Color) — подкрашивает цвет вершин земли к выбранному цвету (белый — без
-  оттенка; земля без цветов считается белой), с тем же радиусом и силой, что и остальные кисти; мазок — один Ctrl+Z,
-  сохраняется в VCLR записи LAND.
+- Landscape **Color** brush (CK: Vertex Color) blends terrain vertex colors toward the selected color (white means no
+  tint; uncolored terrain is treated as white), using the other brushes' radius and strength. One stroke is one Ctrl+Z
+  step; saved in the LAND record's VCLR.
 
 ## 0.32.0
 
-- **Карта высот** (панель «Ландшафт»; CK: Heightmap Editor): экспорт высот загруженных ячеек мира в `.r16` (16 бит,
-  север сверху — читают World Machine, Gaea, графические редакторы) с `.json` рядом (мир, ячейки, диапазон высот) и
-  импорт обратно — загруженные ячейки внутри карты получают её высоты одним шагом отмены, как мазок кисти. Диапазон
-  высот в `.json` можно поменять (например, поднять всё на 1000 единиц).
+- **Heightmap** (Landscape panel; CK: Heightmap Editor): export loaded world-cell heights to `.r16` (16-bit, north at top;
+  read by World Machine, Gaea and image editors), with adjacent `.json` metadata (worldspace, cells, height range), then
+  import them back. Loaded cells inside the map receive its heights as one undo step, like a brush stroke.
+  Edit the `.json` height range to shift everything, for example by 1,000 units.
 
 ## 0.31.0
 
-- **Тинт тела NPC** (CK: Update NPC Body Tint Colors): «Проверка и очистка» предупреждает о NPC, у которых цвет тела
-  (QNAM) не совпадает с тоном кожи лица — это шов на шее; кнопка «Обновить тинт тела» исправляет их в активном файле
-  одним шагом отмены. Формула CK (серый, смешанный с цветом слоя «тон кожи» по его интерполяции) выведена из данных и
-  совпадает у всех 2168 NPC Skyrim.esm и 213 Dawnguard.esm; в STB.esp таких NPC два (`tintprobe`).
+- **NPC body tint** (CK: Update NPC Body Tint Colors): Check and clean warns when body color (QNAM) differs from facial
+  skin tone, causing a neck seam. Update body tint fixes these NPCs in the active file as one undo step. CK's formula
+  (gray blended with the skin-tone layer color using its interpolation) was derived from data and matches all 2,168
+  Skyrim.esm and 213 Dawnguard.esm NPCs; STB.esp has two affected NPCs (`tintprobe`).
 
 ## 0.30.0
 
-- **Слить левел-листы** (Файл; xEdit: Create Merged Patch / Wrye Bash, Mator Smash): находит предметные, NPC- и
-  заклинательные левел-листы, которые меняют два и больше плагинов (в игре действует только последний), и показывает,
-  что слияние добавит или уберёт относительно победителя. Правило — по предмету: побеждают записи последнего плагина,
-  который этот предмет менял (так перевыставленный уровень не задваивается, а добавленное другим плагином не теряется).
-  Отмеченные списки пишутся в активный файл одним шагом отмены; если активный файл грузится раньше участников — отказ
-  с объяснением. В сборке STB: 26 списков из 6931 (например, фалмеры Dawnguard в `LCharFalmerMelee`).
+- **Merge leveled lists** (File; xEdit: Create Merged Patch / Wrye Bash, Mator Smash): finds item, NPC and spell leveled
+  lists changed by two or more plugins (only the last takes effect in game), and previews additions/removals relative
+  to the winner. Per-item rule: entries from the last plugin changing that item win, avoiding duplicates for changed
+  levels while retaining other plugins' additions. Checked lists go into the active file as one undo step; refuses with
+  an explanation if the active file loads before participants. STB setup: 26 of 6,931 lists (for example Dawnguard Falmer in `LCharFalmerMelee`).
 
 ## 0.29.0
 
-- **Сравнить с другим файлом** (Файл; xEdit: Compare to…): плагин из порядка загрузки против другой версии того же
-  файла (бэкап, копия коллеги, прошлый релиз) — записи только в плагине, только в другом файле и изменённые, у
-  изменённых — какие поля отличаются. Записи сопоставляются по FormKey через мастера каждого файла и сравниваются
-  побайтно (пересжатие не считается изменением). STB.esp против копии — 2 с. Строка открывает форму записи.
+- **Compare with another file** (File; xEdit: Compare to…): compares a loaded plugin with another version of that file
+  (backup, colleague's copy, previous release), showing records only in the plugin, only in the other file, and changed
+  records with differing fields. Records match by FormKey through each file's masters and compare byte-for-byte
+  (recompression does not count as a change). STB.esp against a copy: two seconds. Click a row to open the record form.
 
 ## 0.28.0
 
-- Навмеш: **«Найти по номеру»** (CK: Select Triangle by Index) — треугольник или вершина загруженного навмеша по
-  номеру, с поворотом камеры к нему; **«Вынести в новый навмеш»** (CK: Move Selection to Separate NavMesh) —
-  выбранные треугольники становятся отдельным навмешем той же ячейки в активном файле, связи соседей перенумеровываются,
-  всё одним шагом отмены; затем Finalize связывает края. Проверено на 75 навмешах (`navsplittest`).
+- Navmesh **Find by index** (CK: Select Triangle by Index) selects a loaded triangle or vertex by number and focuses
+  the camera. **Move to new navmesh** (CK: Move Selection to Separate NavMesh) moves selected triangles into a separate
+  active-file navmesh in the same cell, renumbering neighbor links, all as one undo step; Finalize then links the edges.
+  Checked on 75 navmeshes (`navsplittest`).
 
 ## 0.27.0
 
-- **Фрагменты Papyrus перков**: под записями перка на вкладке «Записи перка» — код каждой записи «Activate»
-  (`PRKF_<EditorID>_<FormID>`, функции с `akTargetRef` и `akActor`, как у CK; подпись — текст кнопки активации).
-  Компиляция и привязка — как у фрагментов квестов, реплик, пакетов и сцен. Теперь в редакторе правятся фрагменты
-  всех видов, что есть у CK.
+- **Perk Papyrus fragments**: code for each Activate entry under the Perk entries tab
+  (`PRKF_<EditorID>_<FormID>`, functions with `akTargetRef` and `akActor`, as in CK; labeled with activation-button text).
+  Compile and bind like quest, dialogue-line, package and scene fragments. All CK fragment types are now editable.
 
 ## 0.26.0
 
-- **Тексты для перевода** (Файл → «Тексты для перевода...»): все тексты плагина, которые видит игрок (названия,
-  описания, книги, реплики, журнал, сообщения, ячейки), выгружаются в JSON — по записи на текст: FormKey, тип,
-  EditorID, поле, исходный текст и пустой `translation`. Заполненный файл импортируется в активный файл
-  (переопределения или собственные записи, если активен сам плагин) одним шагом отмены; переводится только там, где
-  текст ещё тот, что выгружен (если более поздний плагин его поменял — сообщается; есть галочка «всё равно»).
-  STB.esp: 30 754 текста за 7 с.
-- «Найти текст»: у тем (DIAL) больше не находятся заодно тексты их реплик (они находятся как сами реплики);
-  замена в названиях ячеек и миров сохраняется как правка заголовка, как в окне свойств ячейки.
+- **Texts for translation** (File → Texts for translation…): exports all player-visible plugin text (names, descriptions,
+  books, dialogue, journal, messages, cells) to JSON, one entry per text: FormKey, type, EditorID, field, original text
+  and empty `translation`. Import the completed file into the active file (overrides, or own records when the source
+  plugin is active) as one undo step. Text changes only if it still matches the export; later-plugin changes are reported,
+  with an override checkbox. STB.esp: 30,754 texts in seven seconds.
+- Find text: topics (DIAL) no longer also return their lines' text (those are found as INFO records); replacement in
+  cell/worldspace names saves as a header edit, like the cell properties window.
 
 ## 0.25.0
 
-- **«Где используется» для алиаса квеста** (CK: Use Report): кнопка у выбранного алиаса на вкладке «Алиасы». Ищет в
-  самом квесте (условия диалогов и события, записи журнала, цели и их условия, другие алиасы — «заполнить от этого
-  алиаса», их условия, свойства скриптов квеста с этим алиасом, скрипты алиаса), в сценах квеста (актёр, действия,
-  на кого смотрит, условия сцены и фаз), в пакетах с этим квестом-владельцем (цель-алиас, условия, условия процедур)
-  и в репликах тем квеста. Учитываются правки этой сессии. Щелчок по строке открывает форму записи.
+- **Quest alias Use Report** (CK: Use Report): button for the selected alias on the Aliases tab. Searches the quest itself
+  (dialogue/event conditions, journal entries, objectives and conditions, other aliases' fill-from-alias settings and
+  conditions, quest-script properties referring to the alias, alias scripts), quest scenes (actor, actions, head tracking,
+  scene/phase conditions), packages owned by the quest (alias targets, conditions, procedure conditions), and lines in
+  quest topics. Includes this session's edits. Click a row to open the record form.
 
 ## 0.24.0
 
-- **Фрагменты Papyrus пакетов и сцен.** Пакет: вкладка «Начало / конец / смена» — idle и темы событий, под ними код
-  Begin / End / Change (`PF_<EditorID>_<FormID>`, функции с `akActor`, как у CK). Сцена: Begin / End на вкладке
-  «Сцена», начало и завершение фазы — под выбранной фазой (`SF_…`). **Компилировать** пишет скрипт рядом с активным
-  файлом и, если компиляция прошла, привязывает фрагменты к записи (один Ctrl+Z); ошибки — со строкой.
-- Вставка и удаление фазы сцены сдвигают и фрагменты фаз.
-- Ссылки на фрагменты, которых нет в исходнике скрипта (в данных игры таких 38), при компиляции убираются, а не
-  остаются битыми.
-- Вкладка событий пакета показывает только idle и темы (старые служебные блоки скриптов скрыты).
+- **Package and scene Papyrus fragments.** Packages: Begin / End / Change tab shows idles and event topics, followed by
+  Begin / End / Change code (`PF_<EditorID>_<FormID>`, functions with `akActor`, as in CK). Scenes: Begin / End on the Scene
+  tab, phase start/end under the selected phase (`SF_…`). **Compile** writes the script beside the active file and binds
+  fragments to the record on success (one Ctrl+Z step); errors include line numbers.
+- Inserting/removing scene phases also shifts phase fragments.
+- Fragment references absent from script source (38 in game data) are removed on compilation instead of left broken.
+- Package event tab shows only idles and topics (old internal script blocks are hidden).
 
 ## 0.23.0
 
-- **Сцены** (SCEN) правятся и создаются («+ Новая»). Вкладки как в CK: «Сцена» (квест, флаги, условия), «Актёры»
-  (алиасы квеста по именам, флаги и поведение при смерти / бое / диалоге галочками; новый актёр — как в ванили:
-  смерть и бой завершают, диалог ставит на паузу), **«Фазы и действия»** — таймлайн: строка на актёра и строка
-  таймеров, столбец на фазу, действие тянется от начальной фазы до конечной. «+» в клетке добавляет реплику, пакет
-  или таймер; фазу можно добавить в конец, вставить перед выбранной и убрать (действия только этой фазы уходят с ней,
-  остальные сдвигаются). Под таймлайном — выбранное действие (актёр, фазы, на кого смотрит, флаги, эмоция, пакеты,
-  секунды таймера) или фаза (имя, условия начала и завершения).
-- У реплики сцены — её тема с репликами и ответами прямо в форме сцены (как во вкладке «Диалоги» квеста); без темы —
-  кнопка **«+ тема сцены»** (категория Scene, квест сцены).
-- Новая сцена по подзаписям совпадает с ванильной `dunFellglow_ReleaseDogs`, собранной теми же шагами (фазы с
-  маркерами NEXT и шириной 200, порядок действий, индексы).
+- **Scenes** (SCEN) can be edited and created (New). CK-style tabs: Scene (quest, flags, conditions), Actors (quest aliases
+  by name, flags and death/combat/dialogue behavior checkboxes; new actors match vanilla: death and combat end the scene,
+  dialogue pauses it), **Phases and actions** timeline with one row per actor plus timers, one column per phase, and
+  actions spanning start/end phases. + in a cell adds dialogue, a package or timer; append a phase, insert before the
+  selection or remove one (actions confined to that phase are removed; others shift). Below the timeline: selected action
+  (actor, phases, head tracking, flags, emotion, packages, timer seconds) or phase (name, start/end conditions).
+- Scene dialogue shows its topic, lines and responses directly in the scene form (like the quest Dialogue tab);
+  without a topic, **Add scene topic** creates one with Scene category and the scene's quest.
+- A new scene matches vanilla `dunFellglow_ReleaseDogs`, built with the same steps, at subrecord level
+  (NEXT phase markers, width 200, action order, indices).
 
 ## 0.22.0
 
-- **AI-пакеты** (PACK) — форма как в CK. «Данные пакета»: шаблон (при выборе шаблона входные данные заполняются его
-  значениями по умолчанию, как в CK), квест-владелец, стиль боя, скорость, флаги и флаги прерывания галочками,
-  **входные данные шаблона по его именам** («Location», «Allow Eating», «Energy»…): место — вид (у ссылки, в ячейке,
-  у объекта, у связанной ссылки, особое: рядом с собой / с точкой старта…) и радиус; цель — конкретная ссылка,
-  объект, тип объекта, связанная ссылка, алиас квеста-владельца по имени, сам; да/нет, числа, темы.
-  «Расписание»: месяц, день недели (будни, выходные…), число, час, минута, длительность, сводка словами.
-  «Дерево процедур»: ветки деревом (Sequence → Travel, UnlockDoors, Sandbox…), у ветки — тип, процедура, флаги,
-  используемые входы по именам и условия; у пакета с шаблоном — дерево шаблона только для чтения.
-- Условия пакета: «для кого: данные пакета» и параметры «данные пакета» выбираются по имени входа; алиасы — по
-  имени из квеста-владельца.
-- Новый пакет («+ Новая») создаётся как ванильный: в любое время, бегом, все прерывания разрешены, события
-  начала / конца / смены на месте (раньше расписание было «январь, воскресенье, 0:00»). Пакет из шаблона Sandbox
-  по подзаписям совпадает с ванильным `DefaultSandboxCurrentLocation256`.
-- Флаги: у Mutagen значение «Wear Sleep Outfit» записано неверно (десятичное 20000000 — восемь битов вместо бита 29);
-  галочки флагов теперь берут только одиночные биты, а этот флаг — с верным битом.
+- **AI packages** (PACK) have CK-style forms. Package Data: template (choosing one fills inputs with its defaults,
+  like CK), owning quest, combat style, speed, flags and interrupt flags; **template inputs by name** (Location,
+  Allow Eating, Energy…). Locations: kind (near reference, in cell, near object, linked reference, special: near self /
+  starting position…) and radius; targets: specific reference, object, object type, linked reference, owning-quest alias
+  by name, self; booleans, numbers, topics. Schedule: month, weekday (weekdays/weekends…), date, hour, minute, duration,
+  readable summary. Procedure Tree: branches (Sequence → Travel, UnlockDoors, Sandbox…), branch type, procedure,
+  flags, named inputs and conditions; templated packages show a read-only template tree.
+- Package conditions: Run on package data and package-data parameters select inputs by name; aliases use names from the owning quest.
+- New packages (New) match vanilla defaults: any time, running, all interrupts allowed, Begin / End / Change events
+  present (previous schedule: January, Sunday, 0:00). A Sandbox-template package matches vanilla
+  `DefaultSandboxCurrentLocation256` at subrecord level.
+- Flags: Mutagen defines Wear Sleep Outfit incorrectly (decimal 20000000, eight bits rather than bit 29);
+  flag checkboxes now accept only single bits, using the correct bit for this flag.
 
 ## 0.21.0
 
-- Окно рендера: **примитивы рефов** (XPRM) рисуются вместе с маркерами (M), как в CK: триггер-боксы —
-  полупрозрачные коробки с рёбрами, зоны активации — сферы из трёх колец, своим цветом из записи. Комнаты, порталы,
-  multibound и occlusion — только рёбрами; коробка, внутри которой стоит камера, — тоже только рёбрами (иначе
-  она закрашивает весь вид). Размер и вид примитива по-прежнему правятся в «Ещё свойства» рефа.
+- Render window **reference primitives** (XPRM) draw with markers (M), like CK: trigger boxes as translucent boxes with
+  edges, activation areas as three-ring spheres, using record colors. Rooms, portals, multibounds and occlusion draw
+  only edges; boxes containing the camera also draw only edges (otherwise they fill the view). Primitive size and type
+  remain editable under More properties for the reference.
 
 ## 0.20.0
 
-- Окно рендера: кнопка **«Показ»** (CK: Show/Hide) — скрыть статику, мебель, контейнеры, двери, свет, актёров,
-  активаторы, флору и деревья, предметы, звуки, эффекты, маркеры ожидания; снаружи — **«Только текущая ячейка»**.
-  Скрытое не рисуется и не выбирается кликом.
-- «Проверка и очистка»: предупреждение о чужих NPC, которым плагин меняет лицо, волосы или кожу, а FaceGen-голова
-  берётся из другого плагина (возможное «тёмное лицо»; порядок частей головы и шум float не считаются изменением).
+- Render-window **Show** button (CK: Show/Hide) hides statics, furniture, containers, doors, lights, actors, activators,
+  flora/trees, items, sounds, effects and idle markers; exteriors offer **Current cell only**. Hidden objects are neither
+  drawn nor selectable by click.
+- Check and clean warns about another plugin's NPCs whose face, hair or skin is changed while FaceGen comes from a
+  different plugin (possible dark face; head-part order and float noise do not count as appearance changes).
 
 ## 0.19.0
 
-- **Правка → Найти текст…** (Ctrl+Shift+F): по всем текстовым полям записей плагина (реплики, описания, книги, журнал
-  квестов…) или по EditorID и названиям всех плагинов; **замена** видимого текста (и по галочке EditorID) одним шагом
-  отмены; служебные строки (переменные скриптов, пути) не заменяются.
+- **Edit → Find text…** (Ctrl+Shift+F): searches all plugin record text fields (dialogue, descriptions, books, quest
+  journal…) or EditorIDs/names across all plugins. **Replace** visible text (and optionally EditorID) as one undo step;
+  internal strings (script variables, paths) are not replaced.
 
 ## 0.18.0
 
-- **Правка в сравнении**: ПКМ по значению поля — «Взять это значение в <активный файл>» (сравнение версий) или
-  «Скопировать это значение в остальные записи» (сравнение записей, как Copy to selected records в xEdit). Поле
-  копируется целиком через маску Mutagen; поля, которые Mutagen задевает сверх маски (скелет расы), возвращаются.
+- **Edit from comparison**: right-click a field value → Take this value into <active file> (version comparison), or
+  Copy this value to other records (record comparison, like xEdit Copy to selected records). The entire field is copied
+  through a Mutagen mask; fields Mutagen changes beyond the mask (race skeleton) are restored.
 
 ## 0.17.0
 
-- **Файл → Сжать FormID…** (Compact FormIDs for ESL / Convert to light): свои записи активного файла в 0x800–0xFFF,
-  ссылки внутри плагина следуют, флаг ESL по желанию, FaceGen и озвучка рядом переименовываются; бэкап, перезагрузка,
-  предупреждение о зависимых плагинах. Записи, которых сжатие не касается, сохраняются байт в байт.
+- **File → Compact FormIDs…** (Compact FormIDs for ESL / Convert to light): compacts active-file own records into
+  0x800–0xFFF, updates internal links, optionally sets ESL and renames adjacent FaceGen/voice assets; backup, reload and
+  dependent-plugin warning. Unaffected records remain byte-for-byte unchanged.
 
 ## 0.16.0
 
-- **Файл → Упаковать в BSA…** (Create Archive в CK): ассеты рядом с активным файлом — в `<плагин>.bsa` и
-  `<плагин> - Textures.bsa` (SSE, версия 105, без сжатия). Исходники скриптов и SEQ не упаковываются, старый архив
-  уходит в бэкапы. Хэши имён совпадают со всеми файлами ванильных архивов (`stbedit-cli bsatest`).
+- **File → Pack BSA…** (CK: Create Archive): packs assets beside the active file into `<plugin>.bsa` and
+  `<plugin> - Textures.bsa` (SSE version 105, uncompressed). Script sources and SEQ are excluded; old archives are backed up.
+  Filename hashes match every file in vanilla archives (`stbedit-cli bsatest`).
 
 ## 0.15.0
 
-- **Файл → Проверка и очистка…** (xEdit: Check for Errors, Quick Auto Clean): ошибки (ссылки на отсутствующие
-  записи, leveled-списки с самими собой, нечитаемые записи), предупреждения (удалённые базовые записи, новые NPC
-  без FaceGen), **ITM** (переопределения, равные версии мастера: записи, заголовки ячеек, рефы) — «Убрать N ITM»,
-  **удалённые рефы** — «Вернуть и выключить» (UDR, как xEdit). Исправления — правки активного файла с Ctrl+Z.
-- Писатель умеет вынимать рефы из плагина (ITM-рефы, свои удалённые рефы) и снимает флаг Deleted при UDR.
+- **File → Check and clean…** (xEdit: Check for Errors, Quick Auto Clean): errors (missing record links, self-containing
+  leveled lists, unreadable records), warnings (deleted base records, new NPCs without FaceGen), **ITM** (overrides identical
+  to their master version: records, cell headers, references) with Remove N ITM, and **deleted references** with Restore
+  and disable (UDR, like xEdit). Fixes are active-file edits with Ctrl+Z.
+- Writer can remove references from plugins (ITM references, deleted own references) and clears Deleted during UDR.
 
 ## 0.14.0
 
-- **Finalize навмеша** (панель навмеша: «Finalize изменённых» / «Finalize ячейки»): треугольники дверей и ссылки
-  дверей на навмеш (XNDP), связи рёбер с соседними навмешами через границы ячеек, запись навмеша в карте навмешей
-  плагина (NAVI). Сверено с тем, что записал CK: двери 12 из 12, связи рёбер на семи участках Тамриэля совпадают
-  (кроме вырожденных треугольников-щепок на границе).
+- **Navmesh Finalize** (Navmesh panel: Finalize changed / Finalize cell): door triangles and door-to-navmesh links
+  (XNDP), edge links to neighboring navmeshes across cell boundaries, and navmesh entries in the plugin's navmesh map
+  (NAVI). Compared with CK output: 12 of 12 doors match; edge links match in seven Tamriel areas
+  (except degenerate sliver triangles at boundaries).
 
 ## 0.13.0
 
-- **Свойства существующей ячейки** (ПКМ по ячейке → «Свойства ячейки…»): имя, флаги, владелец, локация, encounter zone,
-  регионы, освещение (шаблон, цвета, туман — сразу видно в окне рендера), image space, вода, акустика, музыка, небо.
-- **Свойства мира** (ПКМ → «Свойства мира…»): родитель, климат, вода и LOD-вода, музыка, освещение интерьеров, земля
-  по умолчанию, карта.
-- Сохраняется только заголовок ячейки / мира: рефы, земля и навмеш не трогаются.
+- **Existing cell properties** (right-click cell → Cell properties…): name, flags, owner, location, encounter zone,
+  regions, lighting (template, colors, fog, immediately visible in the render window), image space, water, acoustics, music, sky.
+- **Worldspace properties** (right-click → Worldspace properties…): parent, climate, water and LOD water, music,
+  interior lighting, default land, map.
+- Only cell/worldspace headers save; references, landscape and navmesh remain untouched.
 
 ## 0.12.0
 
-- **Диалоги**: вкладка «Диалоги» в форме квеста — ветки и темы квеста, реплики темы со всех плагинов, у реплики флаги,
-  ответы (эмоция, текст, заметки, звук, анимации), подсказка игрока, говорящий, условия, переходы, Shared Info;
-  новые ветка (со стартовой темой), тема, реплика, ответ. Сохраняются только изменённые реплики под заголовком
-  темы (чужие строки темы не переопределяются, счётчик реплик темы пересчитывается).
-- **Фрагменты реплик** «Начало» / «Конец» (скрипт `TIF__…`, `akSpeaker`), компиляция как у стадий квеста.
-- Разбор скриптов фрагментов сохраняет параметры функций (все 7353 QF / TIF сборки пишутся обратно без изменений).
+- **Dialogue**: quest-form Dialogue tab lists quest branches/topics and topic lines from every plugin. Lines have
+  flags, responses (emotion, text, notes, sound, animations), player prompt, speaker, conditions, links and Shared Info;
+  create branches (with starting topic), topics, lines and responses. Only changed lines save under a topic header
+  (other topic subrecords are not overridden; topic line count is recalculated).
+- **Dialogue fragments** Begin / End (`TIF__…` script, `akSpeaker`), compiled like quest-stage fragments.
+- Fragment-script parsing preserves function parameters (all 7,353 QF / TIF scripts in the setup roundtrip unchanged).
 
 ## 0.11.0
 
-- **Компиляция Papyrus**: у скриптов во вкладке «Скрипты» — «Исходник» (правка .psc, «Сохранить и скомпилировать»,
-  ошибки со строкой), «Новый скрипт…» (создаёт исходник с нужным `extends` и прикрепляет скрипт после компиляции).
-  Компилятор из папки игры или из настроек, импорты — исходники всех модов MO2 (и выключенных, например SOURCE),
-  результат — рядом с активным файлом.
-- **Фрагменты стадий квеста**: код Papyrus прямо под записью журнала, компиляция скрипта `QF_…` как в CK (остальные
-  фрагменты и свойства автора сохраняются, свойства алиасов заполняются сами, `kmyQuest`), таблица фрагментов
-  квеста обновляется.
-- **SEQ-файл** пишется при сохранении, если в плагине есть квесты «Start Game Enabled».
-- Вкладка «Скрипты» теперь и у квестов, перков, пакетов, сцен (у них свои данные скриптов).
+- **Papyrus compilation**: scripts on the Scripts tab offer Source (edit .psc, Save and compile, errors with line numbers)
+  and New script… (creates source with the required `extends`, attaching after compilation). Compiler comes from the game
+  folder or settings; imports use every MO2 mod's sources, including disabled mods such as SOURCE; output goes beside the active file.
+- **Quest-stage fragments**: Papyrus code directly under journal entries, compiling `QF_…` like CK (preserving other
+  fragments and author properties, auto-filling alias properties, `kmyQuest`), with quest fragment-table updates.
+- **SEQ files** are written on save when the plugin contains Start Game Enabled quests.
+- Scripts tab also supports quests, perks, packages and scenes (with their own script data).
 
 ## 0.10.0
 
-- **Редактор квестов**: вкладки как в CK — данные квеста, условия диалогов и события, **стадии** (флаги, записи
-  журнала с текстом, условиями, «завершить / провалить квест», следующим квестом), **цели** (текст, цели на карте —
-  алиасы по имени, условия), **алиасы** (рефа и локации, способ заполнения, флаги, условия, инвентарь, пакеты,
-  заклинания, фракции). Новый алиас получает следующий свободный ID; индексы стадий и целей уникальны, список
-  сортируется. Условия квеста показывают алиасы по имени.
-- Новый квест можно создать в «Окне объектов» (+ Новая).
+- **Quest editor**: CK-style tabs for quest data, dialogue/event conditions, **Stages** (flags, journal entries with text,
+  conditions, complete/fail quest, next quest), **Objectives** (text, map targets using named aliases, conditions),
+  **Aliases** (reference/location, fill method, flags, conditions, inventory, packages, spells, factions).
+  New aliases receive the next free ID; stage/objective indices are unique and sorted. Quest conditions show aliases by name.
+- Create new quests in Object Window (New).
 
 ## 0.9.0
 
-- **Редактор условий** (Condition Items в CK) во всех формах, где есть условия: строки как в CK
-  (`Subject.GetIsID(Hulda) == 1 AND`), оператор / значение / ИЛИ прямо в строке, у выбранного условия — функция
-  с поиском (все ~400), для кого (Subject, Target, реф, алиас, данные пакета…), параметры (форма или номер
-  алиаса), глобальная переменная вместо числа, Swap Subject and Target; порядок, удаление, копировать / вставить
-  условия между записями.
-
-- **Ещё свойства рефа** (раздел в свойствах рефа): все остальные поля, как вкладки CK — уровень лвл-актёра, encounter zone,
-  persistent location, location ref types, activate parents, маркер карты, emittance, свет, лошадь и торговый сундук
-  NPC, примитив, комнаты, порталы, Editor ID рефа. С несколькими выделенными объектами меняется у всех (один Ctrl+Z).
+- **Condition editor** (CK: Condition Items) in every form containing conditions: CK-style rows
+  (`Subject.GetIsID(Hulda) == 1 AND`), inline operator/value/OR, selected-condition function search (all ~400),
+  Run on (Subject, Target, reference, alias, package data…), parameters (form or alias number), global instead of numeric
+  value, Swap Subject and Target; reorder, delete and copy/paste conditions between records.
+- **More reference properties**: remaining fields corresponding to CK tabs, including leveled-actor level, encounter zone,
+  persistent location, location ref types, activate parents, map marker, emittance, light, NPC horse and merchant chest,
+  primitive, rooms, portals and reference Editor ID. With multiple selected objects, changes apply to all as one Ctrl+Z step.
 
 ## 0.8.0
 
-- **Где используется** (Use Info в CK, Referenced By в xEdit): кнопка в форме записи и пункт ПКМ в «Окне объектов».
-  Вкладка «Записи» — какие записи ссылаются (списки, контейнеры, рецепты, скрипты, условия, реплики), вкладка
-  «В мире» — где объект поставлен; двойной клик открывает запись или ячейку с выделенным объектом. Учитывается
-  только побеждающая версия каждой записи. Индекс ссылок строится в фоне после загрузки (секунды; потом из кэша
-  за ~1 с) и занимает около 70 МБ. Находит и альтернативные текстуры (TXST в MODS), реплики диалогов проверяются по
-  плагину, где реплика побеждает; «перейти» работает и для постоянных рефов мира (маркеры карты, NPC).
-- При удалении своей записи, на которую что-то ссылается, подсказка и лог предупреждают об этом.
-- **Свойства нескольких рефов сразу** (Reference Batch Action в CK): выделите несколько объектов — флаги, enable parent,
-  владелец, замок, количество и радиус в Инспекторе применяются ко всем (один Ctrl+Z). Телепорт, связанные рефы и
-  скрипты — по одному объекту.
-- **Замена базового объекта** у рефа (одного или всех выделенных): поле «Базовый объект» в свойствах рефа; положение и
-  свойства остаются, модель в окне рендера меняется сразу.
-- **Править вместе**: выделите несколько записей одного типа в «Окне объектов» (Ctrl/Shift+клик) → ПКМ → «Править
-  вместе» — одна форма, изменённое поле записывается во все (как Copy to selected records в xEdit), один Ctrl+Z.
-- **Таблицы** (Вид → Таблицы… или кнопка «Таблица» в «Окне объектов»): оружие, броня, боеприпасы, зелья, ингредиенты,
-  книги, разное — сортировка по любой колонке, правка прямо в ячейке (как таблицы xEdit), фильтр по имени и плагину.
-- «Окно объектов» → ПКМ → **«Скопировать как override в <активный файл>»** (как в xEdit), и для нескольких выделенных.
+- **Use Info** (CK: Use Info; xEdit: Referenced By): record-form button and Object Window context action. Records tab
+  lists referencing records (lists, containers, recipes, scripts, conditions, dialogue); Placed tab lists world placements.
+  Double-click opens the record or loads the cell with the object selected. Only winning record versions count.
+  The reference index builds in the background after loading (seconds; then ~1 second from cache), using about 70 MB.
+  Also finds alternate textures (TXST in MODS); dialogue lines are checked in their winning plugin; Go to also supports
+  persistent world references (map markers, NPCs).
+- Deleting an own record with incoming references warns in the tooltip and log.
+- **Batch reference properties** (CK: Reference Batch Action): select multiple objects to apply flags, enable parent,
+  owner, lock, count and radius to all in Inspector (one Ctrl+Z step). Teleport, linked references and scripts remain single-object edits.
+- **Replace reference base** (one or all selected): Base object field in reference properties preserves placement and
+  properties while immediately changing the render model.
+- **Edit together**: select same-type records in Object Window (Ctrl/Shift+click) → right-click → Edit together; one form
+  applies each changed field to all (like xEdit Copy to selected records), one Ctrl+Z step.
+- **Tables** (View → Tables… or Table in Object Window): weapons, armor, ammunition, potions, ingredients, books and misc
+  items; sort any column, edit cells directly (like xEdit tables), filter by name/plugin.
+- Object Window → right-click → **Copy as override into <active file>** (like xEdit), also for multiple selections.
 
 ## 0.7.0
 
-- **Новая запись любого типа**: в «Окне объектов» кнопка «+ Новая» (или ПКМ → «Новая запись…»): Editor ID,
-  название, для глобальных переменных и настроек игры — вид (float / int / string / bool). Открывается окно формы.
-- **Удаление**: ПКМ → «Удалить из <активный файл>» или Del в «Окне объектов» — своя запись удаляется из файла,
-  override чужой записи убирается (снова побеждает предыдущий плагин), новая запись сеанса просто исчезает.
-  Записи других плагинов не удаляются. Всё отменяется Ctrl+Z до сохранения.
-- **Копировать / вырезать / вставить объекты**: Ctrl+C, Ctrl+X, Ctrl+V (под курсор), Ctrl+Shift+V (на то же
-  место — можно скопировать в одной ячейке и вставить в другой). Копии и Ctrl+D сохраняют свойства рефа
-  (флаги, enable parent, linked refs, замок, владелец); телепорт не копируется.
-- «Окно объектов»: фильтры **«Все / Переопределённые / Конфликты»** и **«только записи плагина…»**. Конфликты —
-  как фильтр xEdit: версии записи сравниваются по полям, показываются записи, где изменение какого-то плагина
-  теряется у победителя (проверка идёт по кусочку, окно не подвисает).
-- **Файл → Мастера**: мастера активного файла, какие не используются, «Добавить мастер», «Убрать неиспользуемые»
-  (как Add / Clean Masters в xEdit). Применяется при сохранении; FormID перенумеровываются, проверка сохранения
-  это учитывает.
-- **Размер интерфейса** (Вид → Настройки, 75–200 %, кнопки 100 / 115 / 125 / 150 %): шрифт и отступы вместе;
-  в любом месте Ctrl+= / Ctrl+- / Ctrl+0.
-- Исправлено: у записей из Update.esm, Dawnguard, HearthFires и Dragonborn, если эти мастера лежат в моде MO2
-  (например, «Cleaned Masters»), были пустые названия и описания — строки теперь ищутся как в игре
-  (loose-файлы модов по приоритету, затем архивы Data).
+- **New record of any type**: Object Window New button (or right-click → New record…): Editor ID, name and, for globals
+  and game settings, type (float / int / string / bool). Opens the record form.
+- **Removal**: right-click → Remove from <active file> or Del in Object Window deletes own records from the file,
+  removes overrides (the preceding plugin wins again), or discards new session records. Other plugins' records cannot
+  be deleted. Everything is undoable with Ctrl+Z until save.
+- **Copy / cut / paste objects**: Ctrl+C, Ctrl+X, Ctrl+V (under cursor), Ctrl+Shift+V (same position, including copying
+  from one cell to another). Copies and Ctrl+D preserve reference properties (flags, enable parent, linked references,
+  lock, owner); teleport is not copied.
+- Object Window: **All / Overridden / Conflicts** and **only records from plugin…** filters. Like xEdit's filter,
+  conflicts compare record versions by field and show records where a plugin's change is lost in the winner;
+  scanning is time-sliced so the window remains responsive.
+- **File → Masters**: active-file masters, unused status, Add master, Remove unused (like xEdit Add / Clean Masters).
+  Applies on save; FormIDs are renumbered, and save checking accounts for that.
+- **UI scale** (View → Settings, 75–200%, 100 / 115 / 125 / 150% buttons): font and spacing scale together;
+  Ctrl+= / Ctrl+- / Ctrl+0 anywhere.
+- Fixed empty names/descriptions for Update.esm, Dawnguard, HearthFires and Dragonborn records when those masters live
+  in an MO2 mod (for example Cleaned Masters): strings are now found like the game does, using prioritized loose mod files,
+  then Data archives.
 
 ## 0.6.1
 
-- «Проверка сохранения» больше не пугает списком «50+ записей изменится», когда правке нужен новый мастер:
-  сдвиг собственных FormID плагина изменением не считается. В STB.esp вместо 50+ остаётся 2 записи
-  (пустые маркеры в «невидимых» расах). Окно по-русски объясняет причину — какой мастер добавится —
-  и показывает EditorID записей.
+- Save check no longer warns that 50+ records will change when an edit needs a new master: shifts in a plugin's own
+  FormIDs do not count as changes. STB.esp drops from 50+ to two records (empty markers in invisible races).
+  The dialog explains the reason in Russian, naming the added master, and shows record EditorIDs.
 
 ## 0.6.0
 
-- Сравнение записей как в xEdit: версии одной записи из всех плагинов в колонках (мастер слева,
-  победитель справа) — вкладка «Версии» у формы или ПКМ по записи → «Сравнить версии». Зелёным —
-  изменения, которые дошли до игры, красным — изменение, которое победитель теряет (конфликт).
-- Несколько записей рядом: Ctrl+клик / Shift+клик в «Окне объектов», ПКМ → «Сравнить выделенные»
-  (или «Сравнить с …» для выделенной и той, по которой кликнули). Отличия — жёлтым.
-  Списки (ключевые слова, инвентарь, эффекты) выравниваются по значению, а не по номеру строки;
-  «Только различия» прячет одинаковые строки; двойной клик по ссылке открывает запись.
-- Темы оформления (Вид → Настройки → Тема): STB (как было), Windows тёмная/светлая, Карбон, Кобальт,
-  Nord, Двемерская и др. — 15 штук, переключаются сразу.
-- Служебные поля записи (FormVersion, VersionControl, Version2, сырые флаги, сжатие) по умолчанию
-  скрыты во вкладках и «Всех полях»; включить — Настройки → «Показывать служебные поля записи».
+- xEdit-style record comparison: versions from all plugins in columns (master left, winner right), through the form's
+  Versions tab or record context menu → Compare versions. Green marks changes reaching the game; red marks changes
+  lost in the winner (conflicts).
+- Side-by-side records: Ctrl+click / Shift+click in Object Window, right-click → Compare selected (or Compare with…
+  for the selected and clicked records). Differences are yellow. Lists (keywords, inventory, effects) align by value,
+  not row index; Differences only hides equal rows; double-click a link to open the record.
+- Themes (View → Settings → Theme): STB (original), Windows dark/light, Carbon, Cobalt, Nord, Dwemer and others;
+  15 in total, applied immediately.
+- Record header fields (FormVersion, VersionControl, Version2, raw flags, compression) are hidden by default in tabs
+  and All fields; enable Settings → Show record header fields.
 
 ## 0.5.3
 
-- Двойной клик по двери сначала спрашивает «Перейти в …?» с названием места, как в CK (можно отключить).
-- Колесо мыши приближает плавно и меньшим шагом; скорость колеса и полёта — в «Вид → Настройки...».
-- Исправлено: Shift (облёт) резко переносил камеру, если она не смотрела на выделенное — например,
-  сразу после перехода через дверь. Дверь назначения после перехода больше не выделяется.
-- Inspector больше не пишет «Record not found» для рефа, выбранного до загрузки ячейки.
-- Окно «Настройки»: колесо, плавность, скорость полёта, вопрос о дверях, подсветка NPC, FPS, язык.
+- Double-clicking a door first asks Go to…? with the destination name, like CK (can be disabled).
+- Mouse wheel zoom is smoother with smaller steps; wheel and fly speeds are in View → Settings….
+- Fixed Shift-orbit abruptly moving the camera when not looking at the selection, for example immediately after going
+  through a door. The destination door is no longer selected after travel.
+- Inspector no longer reports Record not found for a reference selected before its cell loaded.
+- Settings window: wheel speed, smoothing, fly speed, door confirmation, NPC highlighting, FPS and language.
 
 ## 0.5.2
 
-- Новая иконка STB Editor (exe и окно).
+- New STB Editor icon for the executable and window.
 
 ## 0.5.1
 
-- Поля-ссылки ищут при вводе: под полем список подходящих записей нужного типа (EditorID, название или
-  FormID), выбор стрелками и Enter или кликом; ▼ — полный список типа с фильтром, как выпадающие списки CK.
-  Клик по полю выделяет текст, так что ввод сразу заменяет значение.
-- Иконка STB у программы и окна.
+- Reference fields search while typing: matching records of the required type appear below (EditorID, name or FormID),
+  selected by arrows/Enter or click; ▼ opens the full filtered type list, like CK dropdowns. Clicking a field selects
+  its text, so typing replaces the value immediately.
+- STB application/window icon.
 
 ## 0.5.0
 
-- Формы записей как в CK: вкладки по смыслу (у актёра «Характеристики», «Статы», «Фракции», «Инвентарь»,
-  «Заклинания и перки», «ИИ», «Внешность», «Атаки»; свои вкладки у брони, оружия, перков, заклинаний и др.),
-  списки — таблицами с добавлением и удалением строк. Редактируется сразу, без режима «Edit fields».
-- Отдельные окна форм: двойной клик по записи в Object Window или кнопка «В окне».
-- Дробные числа — со всеми знаками; поля, которые формат файла хранит грубее, помечены «!» с тем, что сохранится.
-- Навыки NPC (словари), мужские/женские варианты, условия и записи перка разных видов теперь редактируются.
-- Скрипты — своя вкладка: список подсказок с прокруткой, свойства видны.
-- Файл → Данные: выбор, какие плагины загружать (мастера подтягиваются сами).
-- Исправлено сохранение: правки GLOB/GMST раньше не записывались; поля за «обрывом» структуры
-  (старые записи) терялись; правка формата VMAD ломала запись. Проверено `formtest` на всех 106 типах.
-- Поле «Type» (внутренний тип Mutagen) больше не показывается.
+- CK-style record forms with meaningful tabs (actors: Traits, Stats, Factions, Inventory, Spells and perks, AI, Appearance,
+  Attacks; specialized tabs for armor, weapons, perks, spells and more), and lists as tables with row addition/removal.
+  Fields edit immediately without an Edit fields mode.
+- Separate form windows: double-click records in Object Window or use Open in window.
+- Floats show all digits; fields stored at lower precision are marked ! with the value that will be saved.
+- NPC skills (dictionaries), male/female variants, conditions and different perk entry types are editable.
+- Scripts have their own tab, scrollable suggestion list and visible properties.
+- File → Data selects plugins to load (masters are included automatically).
+- Saving fixes: GLOB/GMST edits previously were not written; fields after a truncated structure (old records) were lost;
+  editing VMAD format corrupted records. Checked with `formtest` across all 106 types.
+- The Type field (Mutagen's internal type) is no longer shown.
 
 ## 0.4.0
 
-- Исправлено зависание ПК в открытом мире: при открытии Тамриэля редактор занимал 5–12 ГБ памяти
-  (каждая ячейка держала свою копию данных мира из плагина). Теперь сетка 5×5 — около 0,5 ГБ данных,
-  при полёте по миру память не растёт: давно не видимые меши и текстуры выгружаются.
-- Ограничение FPS (Вид → Ограничение FPS, по умолчанию 60, в фоне 15).
-- Гизмо: стрелки и кольца теперь хватаются мышью; поворот в мировых осях работает; нет падения при выходе.
-- Двери: двойной клик по двери с телепортом (или «К связанной двери» в Inspector) открывает ячейку, куда она ведёт.
-- Cell View: справа список объектов загруженной ячейки (клик — выделить и навести камеру).
-- Интерфейс на русском (Вид → Language / Язык), окно «Клавиши и функции» (F1, меню Справка).
-- Подсветка NPC и существ (кнопка NPC, включена по умолчанию).
-- Log и Load Order по умолчанию закрыты (открываются через Вид); новые плагины по умолчанию без флага ESL.
-- Переход на .NET 10.
+- Fixed open-world PC freezes: opening Tamriel used 5–12 GB (each cell retained its own copy of plugin world data).
+  A 5×5 grid now uses about 0.5 GB of data; memory stays flat while flying, with long-unseen meshes/textures evicted.
+- FPS limit (View → FPS limit, default 60, background 15).
+- Gizmo arrows/rings can be grabbed with the mouse; world-axis rotation works; no crash on exit.
+- Doors: double-click a teleport door (or Linked door in Inspector) to open its destination cell.
+- Cell View lists loaded-cell objects on the right (click selects and focuses).
+- Russian UI (View → Language), Keys and features help window (F1, Help menu).
+- NPC/creature highlighting (NPC button, enabled by default).
+- Log and Load Order default to closed (open from View); new plugins default to no ESL flag.
+- Migrated to .NET 10.
 
 ## 0.3.0
 
-- Свойства рефов в Inspector: флаги, enable parent, владелец (NPC / фракция и ранг), замок (уровень, ключ),
-  телепорт с кнопкой **Link with a door…** (связывает две двери и ставит маркеры, в том числе между ячейками),
-  linked references, количество, радиус света.
-- Поля-ссылки: ввод FormID / EditorID, перетаскивание из Object Window, выбор кликом в 3D (**+**).
-- **Edit fields** — редактирование полей любой записи; **Duplicate** — копия базовой записи с новым FormID.
-- Скрипты: список прикреплённых скриптов, свойства с типами из .pex, добавление, удаление, Auto-fill.
-- Навмеш (клавиша **N**): показ, выбор вершин и треугольников, перенос, удаление, новые вершины и треугольники,
-  слияние вершин, флаги (вода, preferred, no large creatures). Связи соседей и сетка поиска пересчитываются.
-  Finalize (NAVI, двери) пока нет — после таких правок нужен finalize в CK.
+- Reference properties in Inspector: flags, enable parent, owner (NPC / faction and rank), lock (level, key),
+  teleport with **Link with a door…** (links two doors and places markers, including across cells),
+  linked references, count and light radius.
+- Reference fields: FormID / EditorID input, drag from Object Window, pick in 3D (**+**).
+- **Edit fields** edits any record's fields; **Duplicate** copies a base record with a new FormID.
+- Scripts: attached-script list, properties typed from .pex, add, remove and Auto-fill.
+- Navmesh (**N**): display, vertex/triangle selection, move, delete, new vertices/triangles, vertex merge, flags
+  (water, preferred, no large creatures). Neighbor links and lookup grid are recalculated.
+  Finalize (NAVI, doors) was not yet available; these edits required finalization in CK at this release.
 
 ## 0.2.0
 
-- Частицы (огонь, дым, искры), billboard-узлы, анимация эффект-шейдеров по формуле игры.
-- NPC и существа вместо зелёных боксов: раса, одежда, FaceGen-лица, поза привязки.
-- World → New Interior Cell / New Worldspace; экстерьерные ячейки создаются там, куда ставится объект.
-- Ландшафт: кисти высот (поднять, опустить, сгладить, выровнять), покраска текстурами, плоская земля (панель Landscape, **H**).
+- Particles (fire, smoke, sparks), billboard nodes and effect-shader animation using the game's formula.
+- NPCs/creatures replace green boxes: race, clothing, FaceGen faces, bind pose.
+- World → New Interior Cell / New Worldspace; exterior cells are created where objects are placed.
+- Landscape: height brushes (raise, lower, smooth, flatten), texture painting and flat terrain (Landscape panel, **H**).
 
 ## 0.1.0
 
-- Загрузка сборки (MO2 или Data), каталог записей, Object Window, Cell View, Inspector, Load Order.
-- 3D-окно: интерьеры, экстерьеры с ландшафтом и водой, свет, камера как в CK.
-- Расстановка и перенос объектов, undo/redo, сохранение в активный файл без потерь (нетронутые записи байт-в-байт).
+- Load a mod setup (MO2 or Data), record catalog, Object Window, Cell View, Inspector, Load Order.
+- 3D view: interiors, exteriors with landscape/water, lighting and CK-style camera.
+- Object placement/movement, undo/redo, lossless saving to the active file (untouched records byte-for-byte unchanged).

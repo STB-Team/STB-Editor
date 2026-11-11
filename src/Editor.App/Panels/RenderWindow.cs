@@ -48,8 +48,21 @@ internal sealed partial class RenderWindow : Panel
         || (NavmeshMode && ImGui.IsMouseDown(ImGuiMouseButton.Left));
 
     /// <summary>Scene loaded and every mesh/texture it asked for has arrived (for --screenshot).</summary>
-    public bool IsSettled => _scene is not null && _loading is null && _renderer is { } r && r.Meshes.Pending == 0 && r.Textures.Pending == 0
-        && _framesRendered > 5 && _scene.Objects.All(o => o.ModelPath is null || o.Model is not null || o.ModelFailed);
+    public bool IsSettled
+    {
+        get
+        {
+            if (_scene is null || _loading is not null || _renderer is not { } renderer
+                || renderer.Meshes.Pending != 0 || renderer.Textures.Pending != 0 || _framesRendered <= 5)
+                return false;
+
+            foreach (var obj in _scene.Objects)
+                if (!obj.IsDeleted && !renderer.Options.Hides(obj)
+                    && obj.ModelPath is not null && obj.Model is null && !obj.ModelFailed)
+                    return false;
+            return true;
+        }
+    }
 
     private int _framesRendered;
     private bool _settledLogged;

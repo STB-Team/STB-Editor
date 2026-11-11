@@ -1,465 +1,492 @@
 # STB Editor
 
-Современная замена Creation Kit для Skyrim SE / AE / VR: расстановка объектов, ячейки и миры,
-ландшафт, навмеш, редактирование любых записей, квесты и диалоги, скрипты Papyrus с компиляцией.
-Плагины ESP / ESM / ESL, header 1.70 и 1.71 (с BEES — и на SE).
+A standalone Skyrim SE / AE / VR editor for object placement, cells and worldspaces, landscape,
+navmesh, record fields, quests and dialogue, and Papyrus scripts with compilation.
+Supports ESP / ESM / ESL plugins and header versions 1.70 and 1.71 (including SE with BEES).
 
-Не требует запуска через MO2: профиль MO2 читается напрямую, плагины сохраняются в папку мода.
+Launching through MO2 is optional: the editor reads its profile directly and saves plugins into mod folders.
 
-- План и решения — [docs/PLAN.md](docs/PLAN.md), разбор CK и концепта SkyrimMapEditor — [docs/ANALYSIS.md](docs/ANALYSIS.md).
-- Для разработчиков (сборка, устройство, проверки, как добавлять функции) — [docs/DEVELOPING.md](docs/DEVELOPING.md).
-- Рендер: шейдеры, эффекты, частицы, что приближено — [docs/RENDERING.md](docs/RENDERING.md).
+- [Developer guide](docs/DEVELOPING.md): building, architecture, checks and adding features.
+- [Rendering guide](docs/RENDERING.md): shaders, effects, particles and approximations.
+- [AI / MCP guide](docs/AI-BRIDGE.md): optional access to the live editor session.
+- [Agent instructions](AGENTS.md).
 
-## Состояние
-Текущий код: 0.76.0 + **Unreleased** (оболочка, скрипты алиасов, исправление коллизий, AI/MCP).
-Таблица описывает возможности, а не результаты полной проверки всех данных игры.
+## Current capabilities
 
+Current code: 0.76.0 + **Unreleased** (workspace shell, alias scripts, collision fixes and AI/MCP).
+These are implemented capabilities, not a claim that all game data has been exhaustively tested or
+that every Creation Kit or xEdit operation has an equivalent.
 
-| Этап | Что | Статус |
-|---|---|---|
-| 0 | Load order (MO2 / Data), индексы как в игре, BSA + loose, каталог записей, Object Window, Cell View (ячейки и их объекты), Inspector, Load Order; интерфейс на русском и английском, справка по клавишам (F1) | готово |
-| 1 | NIF, 3D-окно: интерьеры, экстерьеры с ландшафтом и водой, свет ячейки и точечные источники, выбор кликом, камера как в CK, подгрузка экстерьера за камерой; огонь, дым и прочие частицы, анимация эффектов; NPC и существа (одежда, FaceGen-лица, в позе привязки) | готово |
-| 2 | Расстановка, сохранение в активный файл, undo/redo, каталог с 3D-миниатюрами, свойства рефов (флаги, enable parent, владелец, замок, телепорт, linked refs) | готово |
-| 3 | Формы и поля любой записи, создание/дублирование, сравнение, Use Info, условия, скрипты и свойства; квесты, диалоги, сцены, AI-пакеты и компиляция Papyrus/фрагментов; скрипты алиасов — Unreleased | реализовано; оставшиеся ограничения — в GAPS |
-| 4 | Новые ячейки и миры, свойства существующих; кисти высот и текстур, vertex color, карта высот, границы регионов | реализовано; генерации объектов регионом и Water Flow пока нет |
-| 5 | Навмеш | показ, выбор, перенос, удаление, создание треугольников, флаги, finalize (двери, связи, NAVI), генерация по ячейке — готово |
+| Area | Available behavior |
+|---|---|
+| Data and interface | MO2 / Data load orders, game-consistent indices, BSA and loose assets, record catalog, Object Window, Cell View and its object list, Inspector, Load Order, English and Russian UI, F1 help |
+| 3D view | NIF models, interiors, exteriors with landscape and water, cell and point lighting, click selection, CK-style camera, exterior streaming, particles and animated effects, NPCs and creatures with outfits and FaceGen in bind pose |
+| Placement | Active-file saving, undo/redo, 3D thumbnails, reference flags, enable parent, ownership, locks, teleport and linked references |
+| Records | Forms and fields, creation and duplication, comparison, Use Info, conditions, scripts and properties, quests, dialogue, scenes, AI packages, Papyrus and fragment compilation; alias scripts are Unreleased |
+| World editing | New cells and worldspaces, existing header properties, height and texture brushes, vertex colors, heightmaps and region boundaries |
+| Navmesh | Display, selection, movement, deletion, triangle creation, flags, Finalize (doors, links and NAVI), per-cell generation |
 
-**AI / MCP**: совместимый MCP-клиент может работать с открытой несохранённой сессией (снимки, камера,
-FormKey, структурированные правки/undo и предложения с решением пользователя) —
-[docs/AI-BRIDGE.md](docs/AI-BRIDGE.md). Мост по умолчанию выключен; прямые правки и unsandboxed C#-скрипты
-разрешаются отдельно. Это готовый локальный интерфейс, не уникальная возможность модели: coding-агент
-с shell и исходниками может сделать альтернативный IPC/harness. Claude Code — только отдельный
-необязательный launcher в окне AI / MCP, не требование для остальных клиентов.
+**AI / MCP:** a compatible HTTP MCP client can access the open, unsaved session: screenshots, camera,
+FormKeys, structured edits with undo, and proposals requiring a user decision. The bridge is off by
+default; direct edits and **UNSANDBOXED C# scripts** have separate permissions. External script effects
+are not undoable. This is a ready-made local interface, not a model-exclusive capability: a coding agent
+with a shell and source access can build alternative IPC or a harness. Claude Code is only an optional,
+collapsed launcher in the AI / MCP window, not a requirement for other clients. See the
+[connection and security guide](docs/AI-BRIDGE.md).
 
-Чего ещё нет по сравнению с CK и xEdit и в каком порядке это делать — [docs/GAPS.md](docs/GAPS.md); коротко для тестеров:
-что есть и что в планах — [docs/ROADMAP.md](docs/ROADMAP.md).
+### Current limitations
 
-## Скачать
+- No deep-copy or record transfer between plugins, localized `.strings` writing, or quest
+  stage/objective export. JSON translation export/import is available.
+- No navmesh cover-edge generation, Balance for Optimization, or negative generation volumes.
+  Generation needs manual cleanup; it does not replace all existing navmeshes in a cell.
+- No Join/Break Occlusion Planes, water-current primitives, Water Flow brushes or isometric view.
+  Regions support boundaries and fields, not object/grass generation.
+- Weather preview covers lighting, fog and sky color, not clouds, precipitation or image-space effects.
+  Actors are in bind pose; see [rendering limitations](docs/RENDERING.md). Physics uses Bepu and is
+  not a full Havok simulation. Idle editing does not suggest events from `.hkx` graphs.
+- No general NIF editor, SKSE live-link or built-in LOD/local-map generator. Use external LOD tools
+  such as xLODGen, TexGen and DynDOLOD; Skyrim renders its local map itself.
+- Framework inspection covers SPID, KID, BOS, FLM, DESC, SRD, OAR and DAR, not IED or SkyPatcher/CDF.
+- MCP has no dedicated plugin/navmesh-check tools or proposals for arbitrary field edits.
 
-Готовая сборка — на странице [Releases](https://github.com/STB-Team/STB-Editor/releases/latest):
-скачать `STBEditor-<версия>.zip`, распаковать в любую папку (например `<игра>\STB Editor\`) и запустить
-`STBEditor.exe`. Ставить .NET не нужно. В MO2 можно добавить `STBEditor.exe` как исполняемый файл, но не обязательно —
-профиль MO2 редактор читает сам.
+## Download
 
-## Сборка и запуск
+Get `STBEditor-<version>.zip` from [Releases](https://github.com/STB-Team/STB-Editor/releases/latest),
+extract it anywhere (for example `<game>\STB Editor\`) and run `STBEditor.exe`.
+No separate .NET installation is required. You may register it as an MO2 executable, but the editor
+can read the MO2 profile without being launched through MO2.
 
-Нужен .NET SDK 10.
+## Build and run
+
+Requires .NET SDK 10.
 
 ```powershell
 dotnet build STB-Editor.sln -c Release
 src\Editor.App\bin\Release\net10.0-windows\win-x64\STBEditor.exe
 ```
 
-Готовый портативный архив: `package.ps1` → `dist\STBEditor-<версия>.zip` (распаковать в любую папку,
-в MO2 добавить `STBEditor.exe` как исполняемый файл, как Creation Kit).
+Portable archive: `package.ps1` → `dist\STBEditor-<version>.zip`. Extract anywhere; optionally add
+`STBEditor.exe` to MO2 as an executable, like Creation Kit.
 
-Ключи: `--game <папка игры>`, `--mo2 <папка|none>`, `--profile <имя>`, `--open` (без диалога),
-`--search <текст>`, `--select <FormID>`, `--cell <EditorID|FormID>`, `--screenshot <файл.bmp>` (кадр после загрузки и выход).
-Отладочные ключи — в [docs/DEVELOPING.md](docs/DEVELOPING.md).
+Options: `--game <game folder>`, `--mo2 <folder|none>`, `--profile <name>`, `--open` (skip the dialog),
+`--search <text>`, `--select <FormID>`, `--cell <EditorID|FormID>`,
+`--screenshot <file.bmp>` (capture after loading, then exit).
+See [DEVELOPING.md](docs/DEVELOPING.md) for diagnostic options.
 
-Настройки, кэш каталога, логи и бэкапы — `%LOCALAPPDATA%\STBEditor`.
+Settings, catalog cache, logs and backups live in `%LOCALAPPDATA%\STBEditor`.
 
-## Интерфейс
+## Interface
 
-![Раскладка «Мир»](docs/images/editor-world.png)
+Screenshots show the current Unreleased UI with English controls and the STB mod profile.
+Record names retain the installed game's language; assets and appearance depend on the installation.
 
-- Верхняя рабочая панель: **«Мир»**, **«Записи»**, **«Классическая»** — готовые раскладки панелей,
-  сохранение, отмена/повтор, поиск и выбор активного файла. В «Мире» каталог снизу освобождает место сцене;
-  в «Записях» каталог занимает 38 % ширины, «Инспектор» и «Просмотр» — соседние вкладки справа,
-  формы и сравнения открываются там же ([пример](docs/images/editor-records.png)).
-  Их по-прежнему можно вынести в отдельное окно.
-  Смена раскладки не закрывает записи, не сбрасывает выделение и не меняет историю правок.
-  Существующая пользовательская раскладка при запуске сохраняется; новую нужно выбрать явно.
-  Те же команды доступны через **Вид → Раскладка**. Основной шрифт — Segoe UI, игровые заголовки остаются.
-- Формы записей: карточка с типом, FormID, источником и состоянием; **«Действия с записью»** — Use Info,
-  дублирование, удаление и остальные операции. На широкой форме разделы выбираются слева, в узком Инспекторе —
-  через **«Разделы»**. Специализированные редакторы и **«Все поля»** остаются доступны.
-  Кнопки, вкладки и карточки имеют отдельные поверхности и кромки во всех темах, не только STB.
-  Если viewport узкий или низкий (в том числе при 200 %), toolbar сворачивается в **«Инструменты»** и **«Вид»**,
-  оставляя место сцене; команды не исчезают.
-  Формы и сравнения имеют минимальный читаемый размер, в том числе после загрузки старой раскладки.
-  Зоны закрытия окон и вкладок — 24 px при 100 % масштаба; выделенные кнопки имеют цельную рамку без ярких обрывков.
-  При нехватке высоты шапка формы сокращается; название и источник записи доступны в подсказке к EditorID.
+![World workspace](docs/images/editor-world.png)
 
-- **Квест → Алиасы → выбранный алиас → Скрипты алиасов**: прикрепление/удаление скриптов, исходник,
-  автозаполнение и правка свойств, включая массивы и ссылки на алиасы квестов. Скрипты самого квеста —
-  в отдельном разделе **«Скрипты»**; там показано, сколько скриптов находится на алиасах.
+- The top workspace bar provides **World**, **Records** and **Classic** layouts, saving, undo/redo,
+  search and active-file selection. World places the catalog below the scene; Records gives it
+  38% of the width, with Inspector and Preview as neighboring tabs on the right. Forms and comparisons
+  open there too ([example](docs/images/editor-records.png)), and can still be detached.
+  Changing layout does not close records, clear selection or change edit history. Existing custom
+  layouts are preserved at startup; select a new layout explicitly. The same commands are under
+  **View → Layout**. The main font is Segoe UI; game-style headings remain.
+- Record forms have a header showing type, FormID, source and state. **Record actions** contains
+  Use Info, duplication, deletion and other operations. Wide forms have a section list on the left;
+  narrow Inspectors use **Sections**. Specialized editors and **All fields** remain accessible.
+  Buttons, tabs and cards have distinct surfaces and edges in every theme, not just STB.
+  A narrow or short viewport (including at 200% scaling) collapses toolbar commands into **Tools**
+  and **Display**, rather than removing them. Forms and comparisons have readable minimum sizes,
+  including after loading old layouts. Window/tab close targets are 24 px at 100%; selected buttons
+  have continuous borders. Short forms reduce their header; the EditorID tooltip retains name and source.
+- **Quest → Aliases → selected alias → Alias scripts** attaches/removes scripts, opens source,
+  auto-fills and edits properties, including arrays and quest-alias references. The quest's own scripts
+  are in **Scripts**, which also shows the number of alias scripts.
+- **File → Data** selects the game, MO2 profile and plugins: load everything or only checked plugins,
+  with required masters included automatically. FormID indices remain game-consistent.
+- **View → Language** switches immediately between English and Russian.
+- **View → Settings** controls wheel/fly speed, door confirmation, NPC highlighting, FPS, language,
+  15 color themes, UI size (75–200%; Ctrl+= / Ctrl+- / Ctrl+0), and record header fields (hidden by default).
+- **Help → Keys and features** (F1) lists keys and workflows.
+- **View** controls open windows (Log and Load Order start closed), FPS limits (60 foreground,
+  15 background by default), and resetting the layout.
+- **Cell View** shows cells and their objects side by side when wide, or in **Cells / Cell objects**
+  tabs when narrow. Exterior objects belong to the central or selected cell. Clicking selects an
+  object and focuses the camera. Filter by EditorID, type or FormID; enable extra columns through
+  the table-header context menu.
+- On slower PCs, adjust **Display → Particles / Animations** and **Camera → Cell loading radius**.
+  Camera is inside Display in narrow windows. Meshes and textures not seen for a while are evicted
+  when they exceed their share of video memory.
 
-- **Файл → Данные**: игра, профиль MO2 и **какие плагины загружать**, как в CK: весь порядок загрузки
-  или только отмеченные (нужные им мастера подтянутся сами). Индексы FormID остаются как в игре.
+## Render Window controls
 
-- **Вид → Language / Язык** — русский или английский, переключается сразу.
-- **Вид → Настройки** — колесо мыши и полёт, вопрос перед дверью, подсветка NPC, FPS, язык,
-  **тема оформления** (15 штук, как стили xEdit), **размер интерфейса** (75–200 %; Ctrl+= / Ctrl+- / Ctrl+0),
-  служебные поля записей (по умолчанию скрыты).
-- **Справка → Клавиши и функции** (F1) — все клавиши и что где делается.
-- **Вид** — какие окна открыты (Log и Load Order по умолчанию закрыты), ограничение FPS (по умолчанию 60,
-  в фоне 15), сброс раскладки окон.
-- **Cell View**: на широкой панели ячейки и их объекты рядом; на узкой — вкладки «Ячейки» / «Объекты ячейки».
-  Для экстерьера показываются объекты центральной или выбранной ячейки; клик выделяет объект и наводит камеру,
-  фильтр — по EditorID / типу / FormID. Дополнительные столбцы включаются через контекстное меню заголовков таблицы.
-- Слабый ПК: **Отображение → Частицы / Анимации**, **Камера → Радиус загрузки ячеек**.
-  В узком окне «Камера» находится внутри «Отображения». Меши и текстуры, которые давно не видны,
-  выгружаются сами, когда занимают больше своей доли видеопамяти.
+Camera (CK-style, plus flight):
 
-## Управление в Render Window
-
-Камера (как в CK + полёт):
-
-| Действие | Как |
+| Action | Control |
 |---|---|
-| Загрузить ячейку | двойной клик в Cell View |
-| Создать примитив (как главная панель CK) | Render Window → «Создать»: триггер, мультибаунд, окклюзия, комната и портал (и их связи), коллизия, акустика, источник звука — вокруг выделенного или там, куда смотрит вид |
-| Окно ссылки (как в CK) | двойной клик по объекту: 3D-данные со стрелками шага, флажки CK по типу объекта, вкладки (родитель включения, владелец, замок, телепорт, связанные ссылки, «Ссылаются сюда», скрипты, остальное), «Править базу» |
-| Пройти через дверь | двойной клик по двери → «Пройти через дверь» в окне ссылки (или Inspector → Телепорт → «К связанной двери») — откроется ячейка, куда она ведёт, камера у маркера |
-| Вращать вокруг выделения (без выделения — осмотреться) | Shift + мышь |
-| Панорама | Пробел + мышь или СКМ |
-| Зум | колесо, плавно (Shift — быстрее, Ctrl — медленнее; скорость — «Вид → Настройки...») |
-| Полёт | ПКМ по пустому месту + WASD, Q/E вниз/вверх, колесо при ПКМ — скорость |
-| Орбита | Alt + ЛКМ |
-| Показать выделенное / вид сверху | C или двойной клик / T |
-| Выделенное полупрозрачно → скрыто → видно / показать всё | 1 / Alt+1 |
-| Пресет вида (что показано, свет, скорость, радиус сетки) | кнопка «Пресет»; в узком окне — «Отображение → Пресет» |
-| Где камера / найти объект во всём мире | «Ячейки»: строка «Камера», «Найти объекты в мире» |
+| Load cell | Double-click in Cell View |
+| Create primitive (CK main-toolbar equivalents) | Render Window → Create: trigger, multibound, occlusion, room and portal (with links), collision, acoustic and sound markers; around selection or where the view points |
+| Reference window | Double-click an object: 3D data with step arrows, CK flags by object type, enable parent, ownership, lock, teleport, linked references, Linked From, scripts and other tabs; Edit base |
+| Go through a door | Double-click door → Go through door in the reference window, or Inspector → Teleport → Go to linked door; loads the destination cell at its arrival marker |
+| Orbit selection (look around if none) | Shift + mouse |
+| Pan | Space + mouse or MMB |
+| Zoom | Smooth wheel; Shift faster, Ctrl slower; speed in View → Settings |
+| Fly | RMB on empty space + WASD, Q/E down/up; wheel while holding RMB changes speed |
+| Orbit | Alt + LMB |
+| Focus selection / top view | C or double-click / T |
+| Selection see-through → hidden → shown / show all | 1 / Alt+1 |
+| View preset (visibility, lighting, speed, grid radius) | Preset; in narrow windows, Display → Preset |
+| Camera location / find placements throughout the world | Cells: Camera row and Find placed objects |
 
-Объекты:
+Objects:
 
-| Действие | Как |
+| Action | Control |
 |---|---|
-| Выбрать | ЛКМ, Ctrl+ЛКМ — добавить/убрать |
-| Двигать по земле (как в CK) | ЛКМ-перетаскивание выделенного; с зажатой Z — по высоте; X / Y — только по оси |
-| Вращать (как в CK) | ПКМ-перетаскивание выделенного (ось Z; с X / Y — по другим осям) |
-| Масштаб | S + ЛКМ-перетаскивание |
-| Гизмо | Q выбор, W перемещение (стрелки), E поворот (кольца), R масштаб; L — мировые/локальные оси |
-| Привязка | G — к сетке; шаг, угол и мировые/локальные оси — меню «Привязки» |
-| Уронить на землю | F |
-| Удалить | Delete |
-| Отменить / вернуть | Ctrl+Z / Ctrl+Y (Edit → Undo показывает, что именно) |
-| Точные значения | Inspector → Placement (позиция, поворот в градусах, масштаб) |
-| Маркеры / границы ячеек / каркас | M / B / Shift+W |
-| Поставить объект | перетащить из Object Window (список или плитки) или из Preview в Render Window |
-| Дублировать | Ctrl+D (копия на том же месте, сразу выделена — тащи) |
-| Палитра объектов | Мир → «Палитра объектов...»: клик ставит случайный объект набора со случайным поворотом и размером |
-| Слои | Мир → «Слои...»: группы рефов, скрыть или заморозить (видны, но не выбираются); хранятся вне плагина |
-| Story Manager | Мир → «Story Manager...»: дерево событий, веток и квестовых узлов, щелчок открывает форму |
-| Экспорт FaceGen | Object Window: Ctrl+F4 или правая кнопка → «Экспорт FaceGen» по NPC — голова и тинт как у CK, рядом с активным файлом |
-| Редактор лица | Форма NPC → «Appearance»: части головы, пресеты, ползунки, цвета, тинты и живое превью головы |
-| Run Havok Sim | Alt+H или «Havok» (в узком окне — «Инструменты → Havok»): выделенное падает с физикой и ложится (один Ctrl+Z) |
-| Генерация навмеша | Панель Navmesh → «Сгенерировать навмеш»: по мешам и ландшафту ячейки, затем Finalize |
-| Дерево перков | Форма навыка (AVIF) → «Дерево перков»: узлы перетаскиваются, Ctrl+клик связывает, двойной клик открывает перк; «Как в игре» — само меню игры (её NIF небосвода и звёзд, расстановка как в exe): взять перки, проверить ветки, перетащить звёзды по картинке созвездия |
-| Idle-анимации | World → «Idle-анимации…»: дерево по графам и действиям, порядок проверки, перетаскивание, новые idle |
-| Ассеты плагина | File → «Ассеты плагина…»: какие файлы нужны плагину, откуда они и каких нет |
-| Экспорт данных, ModGroups | File → «Экспорт данных…» (тексты и GMST по видам в TSV), «ModGroups…» (группы плагинов для фильтра конфликтов) |
-| Скрипты | File → «Скрипты…»: C#-скрипты (.csx) читают и правят записи, правки — одним Ctrl+Z; примеры в комплекте |
-| Регионы | World → «Регионы…»: границы на ландшафте, углы перетаскиваются, новые регионы и области |
-| Коллизия | Окно рендера → «Отображение → Коллизия» (F4): коллизия Havok объектов рядом с камерой |
-| Погода и время суток | Окно рендера снаружи → «Отображение → Небо»: погода климата или любая, час 0–24 — свет, туман и цвет неба |
-| Фреймворки SKSE | «Где используется» → «Фреймворки»: SPID, KID, BOS, FLM, DESC, SRD, OAR, DAR; у NPC — вкладки «Заклинания и перки» и «Анимации». «Отображение → Предпросмотр BOS» показывает замены Base Object Swapper |
-| Реплики персонажа | World → «Реплики персонажа…»: что может сказать NPC (условия на ID, голос, фракции…) |
-| Голосовые файлы | World → «Голосовые файлы…»: какие файлы озвучки нужны по голосам, что есть; экспорт списка, .lip (LipGenerator из CK) и .fuz |
-| Копировать / вырезать / вставить | Ctrl+C / Ctrl+X / Ctrl+V — под курсор; Ctrl+Shift+V — на то же место (можно в другую ячейку). Копии сохраняют свойства рефа, кроме телепорта |
+| Select | LMB; Ctrl+LMB adds/removes |
+| Move on ground | LMB-drag selection; hold Z for height, X / Y for one axis |
+| Rotate | RMB-drag selection around Z; hold X / Y for other axes |
+| Scale | S + LMB-drag |
+| Gizmo | Q select, W move (arrows), E rotate (rings), R scale; L world/local axes |
+| Snap | G toggles grid; step, angle and world/local axes in Snapping |
+| Drop to ground | F |
+| Delete | Delete |
+| Undo / redo | Ctrl+Z / Ctrl+Y; Edit → Undo names the operation |
+| Exact values | Inspector → Placement: position, rotation in degrees, scale |
+| Markers / cell borders / wireframe | M / B / Shift+W |
+| Place object | Drag from Object Window (list or tiles) or Preview into Render Window |
+| Duplicate | Ctrl+D; copy at the same position, selected and ready to drag |
+| Object palette | World → Object palette: click to place a random member with randomized rotation and scale |
+| Layers | World → Layers: reference groups, hide or freeze (visible but not selectable); stored outside the plugin |
+| Story Manager | World → Story Manager: event, branch and quest-node tree; click opens a form |
+| Export FaceGen | Object Window: Ctrl+F4 or NPC context menu → Export FaceGen; head and tint next to the active file |
+| Face editor | NPC form → Appearance: head parts, presets, sliders, colors, tints and live head preview |
+| Run Havok Sim | Alt+H or Havok (Tools → Havok when narrow); selected objects fall and settle, one Ctrl+Z |
+| Generate navmesh | Navmesh panel → Generate navmesh: cell meshes and landscape, followed by Finalize |
+| Perk tree | Skill (AVIF) form → Perk tree: drag nodes, Ctrl+click to link, double-click opens perk; As in the game uses the game's sky/star NIF and executable-derived placement, lets you take perks, check branches and drag stars over the constellation |
+| Idle animations | World → Idle animations: graph/action tree, evaluation order, dragging and new idles |
+| Plugin assets | File → Plugin assets: required files, sources and missing assets |
+| Data export, ModGroups | File → Export data: text and GMST categories to TSV; ModGroups: plugin groups for conflict filtering |
+| Scripts | File → Scripts: C# `.csx` scripts read/edit records; API edits form one Ctrl+Z; examples included. Scripts are UNSANDBOXED; external effects are not undoable |
+| Regions | World → Regions: landscape boundaries, draggable corners, new regions and areas |
+| Collision | Render Window → Display → Collision (F4): nearby objects' Havok collision |
+| Weather and time | Exterior Render Window → Display → Sky: climate weather or any weather, hour 0–24; lighting, fog and sky color |
+| SKSE frameworks | Use Info → Frameworks: SPID, KID, BOS, FLM, DESC, SRD, OAR, DAR; NPC Spells and perks / Animations tabs. Display → BOS preview shows Base Object Swapper replacements |
+| Filtered dialogue | World → Filtered dialogue: what an NPC may say, using ID, voice, faction and other conditions |
+| Voice files | World → Voice files: required files by voice type, existing files, list export, `.lip` via CK LipGenerator and `.fuz` |
+| Copy / cut / paste | Ctrl+C / Ctrl+X / Ctrl+V at cursor; Ctrl+Shift+V at original position, including another cell. Copies keep reference properties except teleport |
 
-Панель Render Window разделена по задачам:
-- **Выбор / Перенос / Поворот / Масштаб**, **Привязки**, **Havok**, **Создать** — правка объектов.
-- **Инструменты** — навмеш, ландшафт, палитра и регионы; при переходе к ландшафту или навмешу открывается
-  соответствующая панель. В узком окне здесь же находятся Havok и «Создать».
-- Режим освещения, **Каркас**, **Маркеры**, **Показ** (CK: Show/Hide по типам, включая «Только текущая ячейка»).
-  Скрытое не выбирается; с маркерами видны и примитивы рефов.
-- **Отображение** — вода, земля, трава, туман, яркость, небо, коллизия, границы, показ навмеша, BOS,
-  частицы, анимации и подсветка NPC. **Диагностика** сохраняет счётчики рендера и позволяет вернуть подробный
-  текст поверх сцены. **Камера** — скорость полёта и радиус загрузки; **Пресет** — готовые/сохранённые виды.
-  На узкой панели камера и пресеты находятся внутри «Отображения». Кнопки переносятся по доступной ширине.
+The Render Window toolbar groups commands by task:
+- **Select / Move / Rotate / Scale**, **Snapping**, **Havok**, **Create** edit objects.
+- **Tools** selects navmesh, landscape, palette and regions; switching to landscape/navmesh opens
+  its panel. Narrow windows also put Havok and Create here.
+- Lighting mode, **Wireframe**, **Markers**, **Show** (CK-style type visibility, including **Current
+  cell only**). Hidden objects cannot be selected; markers also show reference primitives.
+- **Display** controls water, terrain, grass, fog, brightness, sky, collision, borders, navmesh, BOS,
+  particles, animations and NPC highlighting. **Diagnostics** keeps rendering counters and can restore
+  detailed text over the scene. **Camera** controls fly speed/loading radius; **Preset** offers built-in
+  and saved views. Narrow toolbars put Camera and Preset in Display; buttons wrap to available width.
 
-## Сохранение (как в CK)
+## Saving (CK-style)
 
-- **File → Active File...** — выбрать плагин, куда пишутся правки, или создать новый (имя, флаги ESL/ESM;
-  ESL по умолчанию выключен).
-  Новый плагин создаётся в `overwrite` MO2 (без MO2 — в `Data`); в MO2 его можно оформить в мод: правый клик по Overwrite → Create mod.
-- **Ctrl+S** — сохранить в активный файл; если активного нет, сначала спросит, куда.
-- Перед заменой: запись во временный файл, проверка чтением, бэкап в `%LOCALAPPDATA%\STBEditor\backups\<плагин>\` (последние 30).
-- Нетронутые записи существующего плагина сохраняются **байт-в-байт**. Если правке нужен новый мастер
-  (запись из плагина, которого нет в мастерах активного файла), собственные FormID плагина сдвигаются и файл
-  переписывается целиком. Окно «Проверка сохранения» требует подтверждения нового мастера **даже без
-  других потерь** и перечисляет отличающиеся записи (перенумерация FormID изменением не считается).
-  До подтверждения целевой ESP не заменяется. Проверьте список; альтернатива — «Сохранить в новый плагин».
-- **Файл → Мастера** — мастера активного файла: какие не используются, «Добавить мастер», «Убрать неиспользуемые»
-  (как в xEdit). Применяется при Ctrl+S, Ctrl+Z отменяет; файл записывается заново с перенумерованными FormID.
-- Изменённый реф из чужого плагина → override в активном файле; «удалённый» чужой реф → безопасно отключён
-  (initially disabled, enable parent = игрок, z = −30000); свой реф — удаляется по-настоящему.
+- **File → Active File...** selects the destination plugin or creates one with a name and ESL/ESM
+  flags; ESL is off by default. New plugins go to MO2 `overwrite` (otherwise `Data`). In MO2,
+  right-click Overwrite → Create mod to turn it into a mod.
+- **Ctrl+S** saves to the active file, asking for a destination first if none is selected.
+- Before replacement, the editor writes a temporary file, verifies it by reading, and backs up to
+  `%LOCALAPPDATA%\STBEditor\backups\<plugin>\`, retaining the last 30 backups.
+- Untouched records in existing plugins remain **byte-for-byte identical**. A new required master
+  shifts the plugin's own FormIDs and requires a full rewrite. **Save validation** requires confirmation
+  of a new master **even without other losses**, and lists differing records (FormID renumbering does
+  not count as a change). The target ESP is not replaced before confirmation. Review the list;
+  **Save to new plugin** is an alternative.
+- **File → Masters** shows unused masters and provides Add master, Remove unused and Sort Masters.
+  Changes apply on Ctrl+S and can be undone with Ctrl+Z; saving rewrites with remapped FormIDs.
+- Editing another plugin's reference creates an override. Deleting it safely disables it (initially
+  disabled, enable parent = player, z = −30000); the active plugin's own reference is actually removed.
 
-## Новые ячейки и миры
+## New cells and worldspaces
 
-- **World → New Interior Cell...** — Editor ID, имя, освещение (шаблон освещения или свои цвета и туман).
-  Ячейка сразу открывается в Render Window — перетаскивай в неё объекты.
-- **World → New Worldspace...** — Editor ID, имя, климат, вода и её высота, высота земли по умолчанию,
-  «small world», сколько ячеек создать вокруг (0, 0).
-- Поставил объект в мире там, где ячейки ещё нет, — ячейка создаётся сама (как в CK).
-- Новые ячейки видны в Cell View с пометкой **new**; всё попадает в активный файл при Ctrl+S, Ctrl+Z отменяет создание.
+- **World → New Interior Cell...**: Editor ID, name, lighting template or custom colors/fog.
+  The cell opens immediately in Render Window, ready for placement.
+- **World → New Worldspace...**: Editor ID, name, climate, water/type/height, default land height,
+  small-world flag and number of cells around (0, 0).
+- Placing an object where an exterior cell does not exist creates the cell automatically.
+- New cells appear in Cell View as **new**. Ctrl+S writes them to the active file; Ctrl+Z undoes creation.
 
-## Ландшафт (как Landscape Edit в CK)
+## Landscape (CK Landscape Edit)
 
-![Новый мир: плоская земля, холм, снег, трава](docs/images/landscape.png)
+![New world: flat land, hill, snow and grass](docs/images/landscape.png)
 
-- **H** или кнопка **Land** на панели Render Window — режим ландшафта; настройки — в панели **Landscape**
-  (вкладка рядом с Preview).
-- Кисти высоты: **Raise / Lower** (Shift меняет направление), **Flatten** (к высоте, где начат мазок), **Smooth**,
-  **Задать высоту** (CK: Absolute Height), **Поднять до / Опустить до** (CK: Raise To / Lower To — не дальше цели),
-  **Шум**. Целевая высота — полем или **Ctrl+клик** по земле. Радиус, **спад** (CK: Edit Falloff %, внутренний круг —
-  полная сила) и сила — ползунками.
-- Кисти текстур: **Paint** (текстура из списка с превью; **макс. непрозрачность** как Max Opacity в CK), **Стереть**,
-  **Убрать траву / Вернуть траву** — видимая текстура уступает двойнику с той же картинкой без травы или с ней
-  (LTundra01 / LTundra01NoGrass), земля выглядит так же. В списке видно, в скольких квадрантах загруженной земли
-  используется текстура, и можно оставить только используемые.
-- ЛКМ-перетаскивание по земле; один мазок — один Ctrl+Z. Края соседних ячеек сшиваются, швов нет.
-- Покраска базовой текстуры четверти ячейки стирает слои над ней; в одной четверти — до 6 слоёв (ограничение игры).
-- **Цвет** — кисть цвета вершин (CK: Vertex Color): подкрашивает землю к выбранному цвету, белый — без оттенка.
-- **Create flat land** — плоская земля заданной высоты во всех загруженных ячейках без земли (для новых миров).
-- **Карта высот**: «Экспорт карты высот» пишет высоты загруженных ячеек в `.r16` (16 бит, север сверху; World Machine,
-  Gaea, графические редакторы) и `.json` рядом; «Импорт карты высот» возвращает отредактированную карту в те же ячейки
-  (один Ctrl+Z).
-- Высоты хранятся в игре с шагом 8 единиц и перепадом не больше 127 шагов между соседними точками —
-  более крутые обрывы обрезаются (ограничение формата LAND).
+- **H** or **Land** on the Render Window toolbar enables landscape mode. Settings are in
+  **Landscape**, a tab next to Preview.
+- Height brushes: **Raise / Lower** (Shift reverses), **Flatten** (stroke-start height), **Smooth**,
+  **Set height** (CK Absolute Height), **Raise to / Lower to** (stop at the target), **Noise**.
+  Enter target height or **Ctrl+click** terrain to sample it. Sliders control radius, **falloff**
+  (CK Edit Falloff %; inner circle has full strength) and strength.
+- Texture brushes: **Paint** (previewed texture list; **Max opacity** as in CK), **Erase**,
+  **Grass off / Grass on**. Grass brushes exchange the visible texture for a twin with the same TXST
+  and opposite grass state (for example LTundra01 / LTundra01NoGrass), preserving appearance.
+  The list shows how many loaded quadrants use each texture and can show only used textures.
+- LMB-drag terrain; one stroke is one Ctrl+Z. Adjacent cell edges are stitched.
+- Painting a quadrant's base texture removes layers above it. Each quadrant supports up to six layers
+  (game limit).
+- **Color** paints vertex colors; white removes tint.
+- **Create flat land** fills loaded cells without terrain at the chosen height, useful for new worlds.
+- **Heightmap**: Export heightmap writes loaded cells to 16-bit `.r16` (north at top, usable with World
+  Machine, Gaea and image editors) plus `.json`; Import heightmap brings edited data back into the same
+  cells as one undo step.
+- LAND stores heights in eight-unit steps, with at most 127 steps between neighboring points;
+  steeper cliffs are clamped by the format.
 
-## Свойства рефа, записи и скрипты (Inspector)
+## Reference properties, records and scripts (Inspector)
 
-Выделенный реф в Render Window — в Inspector:
-- **Placement** — позиция, поворот в градусах, масштаб.
-- **Reference** — флаги (Persistent, Initially disabled, Visible when distant…), **Enable parent**
-  (с «Opposite» и «Pop in»), **Ownership** (NPC или фракция + ранг), **Lock** (уровень, ключ, leveled),
-  **Teleport** (дверь назначения, маркер; **Link with a door…** — кликни вторую дверь, можно в другой
-  ячейке: обе двери получат телепорт друг на друга, маркеры перед дверями), **Linked references**,
-  количество предметов, радиус света.
-- **Ещё свойства** (раскрывающийся раздел) — все остальные поля рефа: Editor ID рефа, уровень лвл-актёра, encounter zone,
-  persistent location, location ref types, activate parents, маркер карты, emittance, свет, лошадь и торговый сундук
-  NPC, примитив, комнаты и порталы и т. д. С несколькими выделенными объектами меняется у всех.
-- **Scripts** — скрипты рефа и их свойства.
+A reference selected in Render Window appears in Inspector:
+- **Placement**: position, rotation in degrees, scale.
+- **Reference**: Persistent, Initially disabled, Visible when distant and other flags; **Enable parent**
+  with Opposite / Pop in; **Ownership** (NPC or faction/rank); **Lock** (level, key, leveled);
+  **Teleport** (destination door and marker; **Link with a door...** lets you click another door,
+  including in another cell, to link both directions and place arrival markers in front);
+  **Linked references**, item count and light radius.
+- **More properties** expands other reference fields: reference Editor ID, leveled-actor level,
+  encounter zone, persistent location, location ref types, activate parents, map marker, emittance,
+  lighting, NPC horse and merchant container, primitives, rooms, portals and more. Multi-selection
+  applies edits to all selected references.
+- **Scripts**: attached scripts and properties.
 
-Поля-ссылки: начни вводить EditorID, название или FormID — под полем появится список подходящих
-записей нужного типа (стрелки и Enter или клик); **▼** — полный список этого типа с фильтром, как
-выпадающие списки CK. Ещё можно перетащить форму из Object Window, а для рефов — нажать **+** и
-кликнуть реф в Render Window (Esc — отмена). **x** очищает.
+Reference fields: type an EditorID, name or FormID to see matching records of the required type;
+use arrows and Enter or click. **▼** opens the full filtered list for that type, like CK dropdowns.
+Drag a form from Object Window, or for placed references use **+** then click in Render Window
+(Esc cancels). **x** clears the field.
 
-### Формы записей (как окна форм CK)
+![Reference picker](docs/images/picker.png)
 
-![Окно формы актёра: вкладки как в CK, навыки редактируются](docs/images/forms.png)
+### Record forms (CK-style)
 
-Любая запись редактируется сразу, без отдельного режима: в Inspector или в **отдельном окне формы** —
-двойной клик по записи в Object Window или кнопка **В окне** (можно открыть несколько).
+![Actor form with editable skills](docs/images/forms.png)
 
-- Вкладки как в CK: у актёра «Характеристики», «Статы», «Фракции», «Инвентарь», «Заклинания и перки»,
-  «ИИ», «Внешность», «Атаки»; свои вкладки у брони, оружия, перков, заклинаний, магических эффектов,
-  контейнеров, зелий, ингредиентов, зачарований, книг, фракций и света. Остальные типы — «Основное» и
-  по вкладке на каждый список и большую структуру.
-- Простые поля — сеткой «поле | значение»; вложенные структуры — разделами; списки (инвентарь, фракции,
-  перки, эффекты, условия, записи перка) — таблицами или раскрываемыми строками, **+ добавить** / **x**.
-  Для списков разных видов (условия, записи перка) «+ добавить» спрашивает, какой вид.
-- **Условия** (CTDA — у перков, эффектов, заклинаний, пакетов, рецептов, idle, экранов загрузки, алиасов квестов…)
-  показываются строками, как в CK: `Subject.GetIsID(Hulda) == 1 AND`. В строке меняются оператор, значение и ИЛИ;
-  щелчок по условию открывает под таблицей **функцию** (поиск по всем ~400 функциям), **для кого** (Subject, Target,
-  реф, алиас квеста, данные пакета…), **параметры** (форма, или номер алиаса / данных пакета), **глобальную
-  переменную** вместо числа и **Swap Subject and Target**. Кнопки ^ / v / x — порядок и удаление; **Копировать
-  условия** и **Вставить** — перенос в другую запись. Каждое изменение — один Ctrl+Z.
-- **Квесты** — вкладки как в CK: «Данные квеста» (тип, приоритет, флаги вроде Start Game Enabled / Run Once, событие),
-  «Условия диалогов», «Условия события», **«Стадии»** (слева список стадий, справа индекс, флаги старт / завершение,
-  записи журнала с текстом, флагами «завершить / провалить квест», следующим квестом и условиями; видно, какой
-  фрагмент Papyrus у записи), **«Цели»** (индекс, текст, «ИЛИ с предыдущей», цели на карте — алиас из списка, флаги,
-  условия), **«Алиасы»** (новый алиас рефа или локации получает следующий свободный ID; способ заполнения —
-  конкретный реф, уникальный актёр, локация, реф из локации алиаса, алиас другого квеста, создать реф, найти рядом
-  с алиасом / по событию / по условиям; флаги галочками; условия, инвентарь, заклинания, фракции, пакеты, голос).
-  В условиях квеста алиасы выбираются по имени. Индекс стадии или цели меняется с пересортировкой списка.
-  У алиаса — **«Где используется»**: условия, цели, другие алиасы и скрипты квеста, его сцены, пакеты и реплики.
-  Скрипты алиасов и их свойства правятся у выбранного алиаса; фрагменты стадий — под записью журнала
-  с компиляцией через установленный PapyrusCompiler (см. ниже).
-- **Сцены** — «Сцена» (квест, флаги, условия), «Актёры» (алиасы квеста, флаги поведения), **«Фазы и действия»**:
-  таймлайн «актёры × фазы», действие тянется от начальной фазы до конечной; «+» в клетке — реплика, пакет или
-  таймер; фазы добавляются, вставляются и убираются со сдвигом действий. У реплики сцены её тема с репликами правится
-  тут же; «+ тема сцены» создаёт тему для действия. Фрагменты Papyrus сцены (Begin / End) — на вкладке «Сцена»,
-  начала и завершения фазы — под выбранной фазой.
-- **Фрагменты Papyrus перков** — под «Записями перка»: код каждой записи «Activate», компиляция и привязка.
-- **Слить левел-листы** (Файл): списки, которые меняют несколько плагинов, сливаются в активный файл (merged patch),
-  с показом, что добавится и что уберётся.
-- **Сравнить с другим файлом** (Файл): что добавлено, удалено и изменено (с полями) против другой версии плагина.
-- **Тексты для перевода** (Файл): выгрузка всех текстов плагина, которые видит игрок, в JSON с пустым полем
-  `translation` и загрузка заполненного файла обратно в активный файл одним шагом отмены.
-- **AI-пакеты** — вкладки как в CK: «Данные пакета» (шаблон — его выбор заполняет входные данные значениями шаблона;
-  квест-владелец, скорость, флаги и флаги прерывания; **входные данные по именам шаблона**: место с видом и радиусом,
-  цель — ссылка / объект / тип / связанная ссылка / алиас по имени / сам, да/нет, числа, темы), **«Расписание»**
-  (месяц, день недели, число, время, длительность, сводка словами), «Условия» (данные пакета и алиасы — по именам),
-  «Idle-анимации», «Начало / конец / смена» (idle, темы и **фрагменты Papyrus** Begin / End / Change), **«Дерево процедур»** (ветки деревом, у пакета с шаблоном — дерево
-  шаблона только для чтения).
-- Дробные числа вводятся текстом и хранятся **со всеми знаками** (не «0.00», как в перках CK).
-  Если формат файла хранит поле грубее (класс брони — сотые, многие доли — байтом) или только при
-  другой настройке, у поля появляется **!** с тем, что реально сохранится.
-- Правка, после которой запись не записалась бы и не прочиталась обратно, не применяется (в логе причина).
-- **Все поля** — полное дерево записи (тоже редактируемое). Служебные поля заголовка (FormVersion,
-  VersionControl, Version2, сырые флаги) скрыты; показать — «Настройки → Показывать служебные поля записи».
-- **Версии** — запись во всех плагинах рядом, как в xEdit (см. ниже «Сравнение записей»).
-- **Duplicate** — копия базовой записи с новым FormID и EditorID в активном файле: она сразу
-  появляется в Object Window и её можно ставить в мир.
-- Поле «Type» в «Всех полях» раньше показывало внутренний тип Mutagen (`INpcGetter`) — к данным
-  плагина он не относится и больше не показывается; настоящие поля «Тип» (у заклинаний, книг) остаются.
+Any record is editable immediately, without an edit-mode toggle, in Inspector or a **separate form
+window**: double-click in Object Window or use **In window**. Multiple forms can remain open.
 
-![Скрипт жилы руды: свойства из .pex со значениями](docs/images/scripts.png)
+- CK-style actor sections: Traits, Stats, Factions, Inventory, Spells and perks, AI, Appearance, Attacks.
+  Armor, weapons, perks, spells, magic effects, containers, potions, ingredients, enchantments, books,
+  factions and lights have their own sections. Other types have General plus a section per list or
+  large structure.
+- Simple fields use a field/value grid; nested structures use sections. Inventory, factions, perks,
+  effects, conditions and perk entries use tables or expandable rows with **+ Add / x**. Polymorphic
+  lists, such as conditions and perk entries, ask which kind to add.
+- **Conditions** (CTDA: perks, effects, spells, packages, recipes, idles, loading screens, quest aliases…)
+  use CK-style rows such as `Subject.GetIsID(Hulda) == 1 AND`. Edit operator, value and OR in the row;
+  click to edit the **function** (search roughly 400), **Run On** (Subject, Target, reference, quest alias,
+  package data…), parameters (form or alias/package-data number), a global instead of a numeric value,
+  and Swap Subject and Target. ^ / v / x reorder/delete; Copy conditions / Paste transfers conditions.
+  Each change is one undo step.
+- **Quests**: Quest Data (type, priority, Start Game Enabled / Run Once and other flags, event),
+  Dialogue Conditions, Event Conditions, **Stages** (list plus index, start/shutdown flags, journal
+  entries, complete/fail flags, next quest, conditions and Papyrus fragment), **Objectives** (index,
+  text, OR with previous, map targets using named aliases, flags and conditions), **Aliases**.
+  New reference/location aliases get the next free ID. Filling methods include specific reference,
+  unique actor, location, reference from an alias location, another quest's alias, create reference,
+  and find near alias/by event/by conditions. Edit flags, conditions, inventory, spells, factions,
+  packages and voice. Conditions select aliases by name; changing a stage/objective index re-sorts it.
+  Alias **Use Report** covers conditions, objectives, other aliases, quest scripts, scenes, packages
+  and dialogue. Alias scripts/properties are edited on the selected alias; stage fragments below
+  journal entries compile through an installed PapyrusCompiler.
+- **Scenes**: Scene (quest, flags, conditions), Actors (quest aliases and behavior flags), **Phases and
+  actions** timeline (actors × phases). Actions span start/end phases; **+** in a cell adds dialogue,
+  package or timer. Adding, inserting or removing phases shifts actions. Dialogue actions edit their
+  topic and lines inline; **+ Scene topic** creates one. Scene Begin / End fragments are on Scene;
+  phase start/end fragments are below the selected phase.
+- **Perk Papyrus fragments**: each Activate entry's code, compilation and binding below Perk entries.
+- **Merge leveled lists** (File): merge lists changed by multiple plugins into the active file, previewing
+  additions/removals. Merged patches also support containers, NPC lists, outfits and form lists.
+- **Compare with another file** (File): added, removed and changed records, including fields, against
+  another plugin version. Delta patches copy added/changed records as overrides, excluding cell content
+  (references, cells and navmeshes).
+- **Texts for translation** (File): export player-visible plugin text to JSON with empty `translation`
+  fields; import filled translations to the active file as one undo step. This does not write localized
+  `.strings` files.
+- **AI packages**: Package Data (template selection initializes template inputs; owning quest, speed,
+  flags and interrupt flags), **named template inputs** (location kind/radius; target as reference,
+  object, type, linked reference, named alias or self; booleans, numbers, topics), **Schedule** (month,
+  weekday, date, time, duration, readable summary), Conditions (named package data/aliases), Idle
+  animations, Begin / End / Change (idles, topics and Papyrus fragments), **Procedure tree**. Branches
+  and their inputs can be added, removed and reordered; templated packages show a read-only template tree.
+- Floating-point values are entered as text and retain **all digits**, not CK's rounded `0.00`.
+  If the format stores a coarser value (armor in hundredths, many fractions as bytes) or only under
+  another setting, **!** explains what will actually save.
+- An edit that would not survive writing and reading the record is rejected, with a reason in the log.
+- **All fields** is the complete editable tree. Header metadata (FormVersion, VersionControl, Version2,
+  raw flags) is hidden unless Settings → Show record header fields is enabled.
+- **Versions** compares the record across plugins, as in xEdit.
+- **Duplicate** creates a base record with a new FormID/EditorID in the active file; it immediately
+  appears in Object Window and can be placed.
+- Internal Mutagen type metadata such as `INpcGetter` is not shown as a Type field; real Type fields
+  on spells, books and other records remain visible.
 
-**Несколько объектов сразу**: выделите их в окне рендера (Ctrl+клик или рамкой) — флаги, enable parent, владелец,
-замок, количество и радиус применяются ко всем выделенным одним шагом отмены. **Базовый объект** в свойствах рефа
-меняет то, что стоит на этом месте (как Search & Replace в CK), сохраняя положение и свойства.
+![Ore-vein script properties from PEX with plugin values](docs/images/scripts.png)
 
-Скрипты (как вкладка Scripts в CK): список прикреплённых скриптов, свойства из скомпилированного
-.pex (тип, описание), значения из плагина; незаданные — серым. **Add** — прикрепить скрипт по имени
-(подсказки из всех .pex сборки), **Auto-fill** — заполнить объектные свойства, чьё имя совпадает с
-EditorID формы, **Remove script**. Вкладка есть и у квестов, перков, пакетов (свои виды данных скриптов).
+**Multiple objects:** select with Ctrl+click or a marquee. Flags, enable parent, owner, lock, count and
+radius apply to all as one undo step. **Base object** changes what occupies a reference while preserving
+its placement and properties, like CK Search & Replace.
 
-**Papyrus** (как Papyrus Manager / Edit Source в CK): **Исходник** у скрипта открывает его .psc в окне — **Сохранить и
-скомпилировать**; если в поле имени ввести новое имя, кнопка **Новый скрипт X (extends …)** создаёт исходник
-(`extends` по типу записи: Quest, Actor, ObjectReference, ActiveMagicEffect, Perk…), и после успешной компиляции
-скрипт сам прикрепляется. Компилятор — `<игра>\Papyrus Compiler\PapyrusCompiler.exe` (или путь в «Настройках»),
-импорты — папки `Scripts\Source` / `Source\Scripts` всех модов MO2 (выше приоритет — раньше; выключенные моды
-вроде «SOURCE» с исходниками игры — в конце). Исходник и .pex кладутся **рядом с активным файлом** (в его мод:
-`Scripts\Source`, `Scripts`); чужой скрипт сохраняется копией туда же. Ошибки — с номером строки.
+**Scripts** lists attached scripts and properties from compiled `.pex` files (type and description),
+with values from the plugin; unset values are gray. **Add** attaches by name with suggestions from all
+available `.pex` files. **Auto-fill** fills object properties whose names match a form's EditorID;
+**Remove script** detaches it. Quests, perks and packages expose their own script-data types too.
 
-**Фрагменты стадий квеста**: под каждой записью журнала поле кода Papyrus и **Компилировать** — как в CK, весь
-скрипт фрагментов квеста `QF_<EditorID>_<FormID>` пишется заново (код других фрагментов и свойства автора после
-`;END FRAGMENT CODE` сохраняются, свойства `Alias_*` создаются для всех алиасов и заполняются сами), компилируется,
-и квест получает таблицу фрагментов. Если у квеста есть свой скрипт, новый фрагмент получает `kmyQuest`.
-Ошибка показывается под тем фрагментом, где она, со строкой внутри фрагмента.
+**Papyrus** (CK Papyrus Manager / Edit Source): **Source** opens `.psc`; **Save and compile** builds it.
+Entering a new script name offers **New script X (extends …)**, creating source with the record-appropriate
+base (Quest, Actor, ObjectReference, ActiveMagicEffect, Perk…) and attaching it after successful compilation.
+Compiler: `<game>\Papyrus Compiler\PapyrusCompiler.exe`, or the configured path in Settings.
+Imports come from `Scripts\Source` / `Source\Scripts` in all MO2 mods, highest priority first;
+disabled source mods such as SOURCE are searched last. Source and `.pex` are written **next to the active
+file**, under `Scripts\Source` and `Scripts`; editing another mod's script saves a copy there.
+Errors include line numbers.
 
-**Свойства ячейки и мира** (ПКМ по ячейке в «Ячейках» → «Свойства ячейки…» / «Свойства мира…», или «Свойства…» в
-форме ячейки): у ячейки — имя, флаги, владелец, локация, encounter zone, регионы, **освещение** (шаблон, цвета,
-туман, направленный свет — в окне рендера меняется сразу), image space, вода (тип, высота), акустика, музыка, небо
-из региона; у мира — родитель, климат, вода и LOD-вода, музыка, освещение интерьеров, земля по умолчанию, карта.
-В плагин пишется только заголовок (рефы, земля и навмеш остаются как есть).
+**Quest stage fragments:** each journal entry has Papyrus code and **Compile**. The whole
+`QF_<EditorID>_<FormID>` script is regenerated, preserving other fragments and author properties after
+`;END FRAGMENT CODE`; `Alias_*` properties are generated and filled for all aliases. After compilation,
+the quest receives its fragment table. A quest with its own script gives a new fragment `kmyQuest`.
+Errors appear below the affected fragment with fragment-relative line numbers.
 
-**Диалоги** — вкладка «Диалоги» в форме квеста (как Player Dialogue / Misc и окно Topic Info в CK): слева ветки
-квеста с их темами (стартовая помечена) и остальные темы по категориям (бой, обнаружение, сервис, разное…), справа
-выбранная тема (текст игрока, приоритет, категория, подтип, ветка) и её **реплики** со всех плагинов (у каждой —
-плагин-победитель). У выбранной реплики: флаги (прощание, один раз, случайная, уходит…), **ответы** (эмоция, сила,
-текст; заметки, звук, анимации), подсказка игрока, говорящий, условия, переходы к темам, Shared Info, тема ухода и
-фрагменты Papyrus **«Начало» / «Конец»** (скрипт `TIF__<FormID>`, компилируется как фрагменты стадий).
-**+ ветка** создаёт ветку со стартовой темой, **+ тема**, **+ реплика**, **+ ответ**. В плагин пишутся только изменённые
-реплики под заголовком темы — остальные строки чужих тем не переопределяются.
+**Cell/worldspace properties:** right-click a cell in Cells → Cell properties / Worldspace properties,
+or use Properties in its form. Cells expose name, flags, owner, location, encounter zone, regions,
+lighting template/colors/fog/directional light (immediate viewport update), image space, water type/height,
+acoustics, music and regional sky. Worlds expose parent, climate, water/LOD water, music, interior
+lighting, default land and map. Only the header is written; references, terrain and navmesh stay intact.
 
-**SEQ**: при сохранении плагина с квестами «Start Game Enabled» рядом с ним пишется `SEQ\<плагин>.seq` (как CK и
-«Create SEQ File» в xEdit) — без него такие квесты и их диалоги не стартуют в новой игре.
+**Dialogue:** the quest's Dialogue section provides CK Player Dialogue / Misc and Topic Info workflows.
+The left side lists branches and topics (marking the start topic), plus other topics by category
+(combat, detection, service, miscellaneous…). The right side edits the topic's player text, priority,
+category, subtype and branch, and lines from all plugins with their winning source. Lines expose flags
+(goodbye, once, random, walk away…), **responses** (emotion, intensity, text, notes, sound, animations),
+player prompt, speaker, conditions, topic links, Shared Info, walk-away topic and Begin / End Papyrus
+fragments (`TIF__<FormID>`, compiled like stage fragments). **+ Branch** creates a branch with its start
+topic; **+ Topic / + Line / + Response** add entries. Lines can be reordered by dragging and the active
+file's own lines deleted; the dialogue graph shows topic links. Only changed lines are written under
+the topic header; untouched lines in other plugins' topics are not overridden.
 
-Каждое изменение — один Ctrl+Z; сохраняется в активный файл как override (байт-в-байт для остального).
+**SEQ:** saving a plugin with Start Game Enabled quests writes `SEQ\<plugin>.seq` beside it, as CK or
+xEdit Create SEQ File does; without it those quests and their dialogue do not start in a new game.
 
-### Сравнение записей (как в xEdit)
+Each document edit is one Ctrl+Z and saves to the active file as an override, preserving other records'
+bytes. Compiled scripts and other external files are not reverted by document undo.
 
-![Версии записи из трёх плагинов: зелёным — изменения победителя](docs/images/compare.png)
+### Record comparison (xEdit-style)
 
-- **Версии одной записи**: вкладка «Версии» у формы, кнопка «Открыть в окне сравнения» или ПКМ по записи
-  в «Окне объектов» → «Сравнить версии». Колонки — плагины в порядке загрузки, мастер слева, победитель
-  справа (несохранённая правка — последней колонкой).
-  - зелёная строка — победитель несёт изменения, сделанные поверх мастера;
-  - красная — конфликт: какой-то плагин изменил поле, а победитель это изменение теряет (красным — потерянное
-    значение, зелёным — то, что пойдёт в игру);
-  - серым — значение, которое заменили.
-- **Несколько записей**: Ctrl+клик / Shift+клик в «Окне объектов», затем ПКМ → «Сравнить выделенные» (до 16).
-  ПКМ по другой записи, когда одна выделена, — «Сравнить с …». Отличия от первой колонки — жёлтым.
-- Списки выравниваются по значению или по записи, на которую указывает строка (ключевое слово, предмет
-  инвентаря, эффект), так что лишняя строка не сдвигает всё ниже. «Только различия» прячет совпадающие
-  строки. Двойной клик по ссылке открывает запись. Поля верхнего уровня копируются через ПКМ по значению
-  (см. «Правка в сравнении»); обычное редактирование — во вкладках формы.
+![Three plugin versions: winning changes in green](docs/images/compare.png)
 
-## Навмеш
+- **Versions of one record:** Versions in its form, Open in comparison window, or Object Window context
+  menu → Compare versions. Plugins run left to right in load order, master first, winner last;
+  an unsaved edit is the final column.
+  - Green: winning changes over the master.
+  - Red: a plugin changed a field but the winner loses that change; red marks the lost value and green
+    the value that reaches the game.
+  - Gray: superseded values.
+- **Multiple records:** Ctrl+click / Shift+click in Object Window, then Compare selected (up to 16).
+  Right-click another record with one selected for Compare with…. Differences from column one are yellow.
+- Lists align by value or linked record (keyword, inventory item, effect), avoiding shifts from an extra
+  row. Only differences hides equal rows. Double-click links to open records. Top-level fields can be
+  copied through their value context menu; normal editing remains in the form sections.
 
-![Навмеш таверны: проходимые треугольники, границы](docs/images/navmesh.png)
+## Navmesh
 
-- **N** или кнопка **Navmesh** — режим навмеша (кнопка **Navmesh** справа на панели только показывает его).
-  Панель **Navmesh** (вкладка рядом с Preview) — что выбрано, флаги, операции.
-- Цвета: зелёный — проходимо, жёлтый — preferred, синий — вода, оранжевый — дверь, фиолетовый —
-  без крупных существ, пурпурный — выбрано. Рёбра: красные — открытая граница, светло-голубые —
-  связь с соседним навмешем.
-- Клик — вершина или треугольник (Ctrl добавляет), перетаскивание — перенос (с зажатой Z — по высоте),
-  **Shift+клик** по земле — новая вершина; если выбраны две вершины, сразу и треугольник (так полоса
-  растёт клик за кликом). Перетаскивание по пустому месту или **Shift+перетаскивание** — рамка выделения.
-- **Строка кнопок навмеша** (как панель навмеша в CK) и клавиши CK: **T / V / G** — выбор треугольников / вершин / рёбер,
-  **W** — вид (обычный / поверх / только навмеш), **A** — треугольник или квад, **F / I** — заливка / обратная заливка,
-  **O / P** — вода / предпочтительный путь, **Q** — объединить, **R** / Del — удалить, **D** — снять выделение,
-  поворот ребра, **Ctrl+F** — найти треугольник, **Ctrl+F1** — Finalize, «Проверка пути» — кратчайший путь между двумя
-  кликами. В панели — «Triangle from 3
-  vertices», «Merge vertices», флаги Water / Preferred / No large creatures / Overlapping, **«Вынести в новый
-  навмеш»** (CK: Move Selection to Separate NavMesh) и **«Найти по номеру»** — треугольник или вершина с поворотом камеры.
-- После каждой правки пересчитываются соседства треугольников, границы и сетка поиска; связи
-  загруженных соседних навмешей перенумеровываются. Первая вершина в ячейке без навмеша создаёт новый NAVM.
-- **Finalize** (кнопки «Finalize изменённых» / «Finalize ячейки» в панели, как Finalize в CK): треугольник под точкой
-  прибытия каждой двери получает флаг «дверь» и запись, ссылка двери на навмеш (XNDP) обновляется; открытые рёбра
-  связываются с рёбрами соседних навмешей (границы ячеек, несколько навмешей в ячейке); навмеш получает запись в
-  карте навмешей плагина (NAVI: точка, ячейка или клетка мира, двери). Сверено с данными CK: двери и связи рёбер
-  совпадают на проверенных ячейках (`stbedit-cli finalizetest`).
-- **«Сгенерировать навмеш»** (CK: Generate NavMesh): проходимая поверхность открытой ячейки (снаружи — центральной) по
-  мешам с коллизией и ландшафту; размер актёра и точность — в «Настройках генерации». В интерьере остаётся только то,
-  что связано с дверями (флажок «Оставлять куски, не связанные с дверями» — и большие отдельные). Результат заменяет
-  самый большой навмеш ячейки (или создаёт новый в активном файле), потом выполняется Finalize — по шагу Ctrl+Z.
-  Остальные навмеши ячейки, если они есть, не трогаются: перекрытия удалите сами. Генерация не идеальна — как и после
-  CK, лишнее по краям стоит подрезать.
+![Tavern navmesh and boundary edges](docs/images/navmesh.png)
 
-## Проверка и очистка плагина
+- **N** or the tool's **Navmesh** button enables editing; the separate display button only shows it.
+  The Navmesh panel beside Preview contains selection, flags and operations.
+- Colors: green walkable, yellow preferred, blue water, orange door, violet no large creatures,
+  magenta selected. Red edges are open boundaries; light blue edges link neighboring navmeshes.
+- Click a vertex/triangle (Ctrl adds); drag to move, holding Z for height. **Shift+click** terrain adds
+  a vertex and, when two vertices are selected, a triangle, extending a strip click by click.
+  Drag empty space or **Shift+drag** for a marquee.
+- CK-style toolbar/keys: **T / V / G** triangle/vertex/edge selection, **W** normal/overlay/navmesh-only
+  view, **A** triangle or quad, **F / I** flood/inverse flood, **O / P** water/preferred,
+  **Q** merge, **R / Del** delete, **D** deselect, edge rotation, **Ctrl+F** find triangle,
+  **Ctrl+F1** Finalize. Path test finds a shortest path between two clicks. The panel also provides
+  Triangle from 3 vertices, Merge vertices, Water / Preferred / No large creatures / Overlapping flags,
+  **Move selection to new navmesh** and **Find by index** (triangle or vertex, with camera focus).
+- Every edit rebuilds adjacency, bounds and the search grid; loaded neighbors' links are renumbered.
+  The first vertex in a cell without navmesh creates a NAVM.
+- **Finalize changed / Finalize cell** marks the triangle under each door arrival point, updates door
+  XNDP links, connects matching open edges between navmeshes/cells and writes NAVI entries (position,
+  cell/world grid, doors). Door and edge links matched CK data in the checked cells
+  (`stbedit-cli finalizetest`), not an assertion of exhaustive coverage.
+- **Generate navmesh** builds walkable surfaces for the open cell (central exterior cell) from collision
+  meshes and landscape. Generation settings control actor size and precision. Interiors retain
+  door-connected pieces; Keep pieces not connected to doors also retains large isolated pieces.
+  It replaces the cell's largest navmesh or creates one in the active file, then Finalizes; each is
+  an undo step. Other navmeshes remain untouched: remove overlaps manually. Inspect and trim unwanted
+  edges, as after CK generation.
 
-**Файл → Проверка и очистка…** (xEdit: Check for Errors и Quick Auto Clean): выберите плагин и нажмите «Проверить».
-- **Ошибки**: ссылки на записи, которых нет в наборе плагинов; leveled-списки, которые содержат сами себя;
-  записи, которые не читаются. **Предупреждения**: удалённые базовые записи (игра падает, если их что-то
-  использует), новые NPC без FaceGen-головы (тёмное лицо), чужие NPC, которым плагин меняет лицо, волосы или кожу,
-  а FaceGen берётся из другого плагина (лицо может выглядеть тёмным) — кнопка **«Экспорт FaceGen для N NPC»**,
-  NPC, у которых тинт тела не совпадает с тоном кожи (шов на шее) — кнопка **«Обновить тинт тела»**, как Update NPC
-  Body Tint Colors в CK. Двойной клик открывает запись.
-- **ITM** — переопределения, совпадающие с версией мастера (записи, заголовки ячеек, рефы). Кнопка **«Убрать N ITM»**
-  вынимает их из активного файла (ячейки, миры и темы остаются — в них лежат другие записи).
-- **Удалённые рефы (UDR)**: **«Вернуть и выключить»** — как в xEdit: реф возвращается версией мастера, initially
-  disabled, enable parent = игрок (наоборот), опущен на z = −30000; свои удалённые рефы убираются из файла.
-- Исправления — обычные правки активного файла: Ctrl+Z, сохраняются по Ctrl+S (остальные записи — байт в байт).
+## Plugin checking and cleaning
 
-## Поиск и замена текста
+**File → Check and clean** (xEdit Check for Errors / Quick Auto Clean): select a plugin, then Check.
+- **Errors:** missing record links, self-containing leveled lists and unreadable records.
+  **Warnings:** deleted base records (may crash if used), new NPCs without FaceGen (dark face), changed
+  face/hair/skin with FaceGen from another plugin (possible dark face), and body tint/skin mismatch
+  (neck seam). Actions include **Export FaceGen for N NPCs** and **Update body tint**, like CK Update
+  NPC Body Tint Colors. Double-click opens the record.
+- **ITM:** overrides identical to their master version (records, cell headers, references).
+  **Remove N ITM** removes them from the active file; cell/world/topic containers remain for their contents.
+- **Deleted references (UDR): Restore and disable** restores the master version, initially disabled,
+  enable parent = player with opposite state, z = −30000. Own deleted references are removed.
+- Navmesh checks and deleted-navmesh cleaning are available; deleted navmeshes are restored from the
+  master with vertices lowered to z = −30000. Room/portal checks inspect primitive links.
+- Fixes are normal active-file edits: Ctrl+Z undoes, Ctrl+S saves, preserving other records' bytes.
 
-**Правка → Найти текст…** (Ctrl+Shift+F; CK: Find Text, xEdit: Search and Replace): область — один плагин (все
-текстовые поля его записей: названия, описания, реплики и подсказки диалогов, записи журнала, книги, сообщения;
-секунды) или все плагины (только EditorID и названия, мгновенно). Двойной клик открывает запись (реплику — её
-тему). **Заменить** меняет найденный *видимый игроку* текст в записях как они сейчас (реплики — под своей темой),
-EditorID — по галочке; переменные скриптов, пути и другие служебные строки не заменяются. Один Ctrl+Z.
+## Find and replace text
 
-## Правка в сравнении
+**Edit → Find text** (Ctrl+Shift+F; CK Find Text / xEdit Search and Replace): search one plugin's text
+fields (names, descriptions, dialogue/prompts, journal entries, books, messages; takes seconds), or all
+plugins' EditorIDs and names (immediate). Double-click opens the record, or a dialogue line's topic.
+**Replace** edits matching player-visible text in the current records (dialogue under its topic);
+a checkbox includes EditorIDs. Script variables, paths and other internal strings are excluded.
+One undo step.
 
-В окне сравнения (версии записи по плагинам или несколько записей) **ПКМ по значению поля** верхнего уровня:
-- в сравнении версий — **«Взять это значение в <активный файл>»**: поле целиком (число, ссылка, структура, список —
-  ключевые слова, инвентарь, эффекты) из этой версии переходит в версию активного файла;
-- в сравнении нескольких записей — **«Скопировать это значение в остальные записи»** (xEdit: Copy to selected records).
-Один Ctrl+Z на действие, сохраняется по Ctrl+S.
+## Editing in comparison
 
-## Сжатие FormID и ESL
+Right-click a **top-level field value** in a version or multi-record comparison:
+- Versions: **Take this value into <active file>** copies the entire field (number, link, structure or
+  list such as keywords, inventory or effects) into the active-file version.
+- Multiple records: **Copy this value to other records**, like xEdit Copy to selected records.
+One Ctrl+Z per action; Ctrl+S saves.
 
-**Файл → Сжать FormID…** (xEdit: Compact FormIDs for ESL; CK: Convert to light): свои записи активного файла получают
-номера 0x800–0xFFF (кто уже там — остаётся), все ссылки внутри плагина следуют за ними, по желанию ставится флаг
-ESL (до 2048 своих записей). Файлы FaceGen и озвучки рядом с плагином переименовываются под новые номера (в архивах —
-нет). Плагин сначала копируется в бэкапы и перезагружается; плагины, которые на него ссылаются, перечислены — их
-ссылки на старые номера надо исправить. Нетронутые записи сохраняются байт в байт. Локализованные плагины не сжимаются.
+## Compact FormIDs and ESL
 
-## Упаковка в BSA
+**File → Compact FormIDs** (xEdit Compact FormIDs for ESL / CK Convert to light): own records receive
+IDs in 0x800–0xFFF, keeping those already in range; internal links follow. Optionally set ESL, with up
+to 2048 own records. Loose FaceGen and voice files next to the plugin are renamed, not archived files.
+The plugin is backed up and reloaded first. Dependent plugins are listed: fix their old-ID links yourself.
+Untouched records retain their bytes. Localized plugins cannot be compacted. A single FormID can also
+be changed through the compaction window.
 
-**Файл → Упаковать в BSA…** (CK: Create Archive): файлы рядом с активным файлом (его папка мода) — meshes, textures,
-scripts (.pex), sound, music, interface, strings и т. д. — в `<плагин>.bsa`, текстуры в `<плагин> - Textures.bsa`
-(игра подключает оба вместе с плагином). Исходники `.psc`, SEQ, ini и плагины не упаковываются; существующий архив
-сначала копируется в бэкапы. Архив SSE версии 105 без сжатия (игра читает такие; хэши имён сверены со всеми файлами
-ванильных архивов). Отдельные файлы остаются на месте и важнее архива — уберите их после проверки.
+## BSA packing
 
-## Каталог объектов
+**File → Pack BSA** (CK Create Archive): packs files beside the active plugin, in its mod folder:
+meshes, textures, compiled `.pex`, sound, music, interface, strings and so on. Outputs `<plugin>.bsa`
+and `<plugin> - Textures.bsa`, both loaded with the plugin. `.psc`, SEQ, INI and plugins are excluded.
+Existing archives are backed up. Output is uncompressed SSE version 105; filename hashes were checked
+against vanilla archives. Loose files stay in place and override archives; remove them after checking.
 
-- Object Window: для объектов, которые ставятся в мир, кнопка **Tiles / List** — плитки с готовыми 3D-миниатюрами.
-- **Таблицы** (Вид → Таблицы… или кнопка «Таблица»): оружие, броня, боеприпасы и другие предметы как сортируемые
-  таблицы с правкой прямо в ячейке (урон, вес, цена, класс брони, скорость…).
-- **Править вместе**: несколько записей одного типа (Ctrl/Shift+клик) → ПКМ → «Править вместе» — одна форма, поле
-  меняется во всех сразу (строки списков — по номеру строки).
-- **Где используется** (ПКМ по записи или кнопка в её форме; CK: Use Info, xEdit: Referenced By): записи, которые
-  на неё ссылаются, и все места в мире, где она стоит. Двойной клик — открыть запись или ячейку с выделенным объектом.
-- **+ Новая** (или ПКМ → «Новая запись…») — новая запись показанного типа в активном файле: Editor ID, название,
-  для глобальных и настроек игры — вид. Диалоги, ячейки и миры так не создаются (у них свои инструменты).
-- **Del** или ПКМ → «Удалить из <файл>»: своя запись удаляется из файла при сохранении, override чужой записи
-  убирается (снова побеждает предыдущий плагин). Записи других плагинов не удаляются. Ctrl+Z возвращает.
-- Фильтры над списком: **Все / Переопределённые / Конфликты** и **плагин** (только записи, которые он добавляет
-  или переопределяет). «Конфликты» сравнивают версии по полям, как xEdit: изменение какого-то плагина теряется
-  у победителя.
-- **Preview**: выбранный объект в 3D — ПКМ крутить, колесо зум, двойной клик сброс, Spin — вращение; ЛКМ-перетаскивание ставит объект в мир.
+## Object catalog
 
-## Лицензия
+- **Object Window**: placeable objects have **Tiles / List**, with generated 3D thumbnails.
+- **Tables** (View → Tables or Table button): sortable weapons, armor, ammunition and other item tables
+  with inline edits for damage, weight, value, armor rating, speed and more.
+- **Edit together**: select records of one type with Ctrl/Shift+click, then use the context menu.
+  One form changes fields in all selected records; list entries match by row number.
+- **Use Info** (context menu or form button; xEdit Referenced By): linked records and world placements.
+  Double-click opens the record or loads its cell and selects the object.
+- **+ New** or New record creates the displayed type in the active file: Editor ID, name and, for
+  globals/game settings, kind. Dialogue, cells and worldspaces use their dedicated tools.
+- **Del** or Remove from <file> removes own records on save, or removes an override so the previous
+  plugin wins again. Other plugins' records are not deleted. Ctrl+Z restores the edit.
+- Filters: **All / Overridden / Conflicts** and **plugin** (records it adds or overrides). Conflicts
+  compare fields: a plugin's change is lost in the winning version.
+- **Preview**: selected object in 3D; RMB rotates, wheel zooms, double-click resets, Spin animates
+  rotation; LMB-drag places it in the world.
 
-Будет GPL-3.0 (Mutagen — GPL-3.0). Физика Run Havok Sim — BepuPhysics 2 (Apache-2.0), генерация навмеша — DotRecast (zlib), скрипты — Roslyn (MIT).
+## License
+
+GPL-3.0 licensing status is not yet finalized (Mutagen is GPL-3.0). Run Havok Sim uses BepuPhysics 2
+(Apache-2.0); navmesh generation uses DotRecast (zlib); scripting uses Roslyn (MIT).

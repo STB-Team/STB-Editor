@@ -19,15 +19,15 @@ Copy-Item (Join-Path $root "README.md") (Join-Path $stage "README.md")
 @"
 STB Editor $Version
 
-Распаковать в любую папку, например в корень игры: C:\Skyrim\STB Editor\
-Запуск: STBEditor.exe (ничего ставить не нужно, .NET уже внутри).
+Extract to any folder, for example under the game folder: C:\Skyrim\STB Editor\
+Run STBEditor.exe (no installation needed; .NET is included).
 
-Через MO2: Executables (иконка шестерёнок) -> + -> Add from file -> STBEditor.exe.
-Аргументы не нужны. Редактор сам читает профиль MO2 и папки модов, поэтому
-запускать через MO2 не обязательно - можно и напрямую.
+With MO2: Executables (gears icon) -> + -> Add from file -> STBEditor.exe.
+No arguments are required. The editor reads the MO2 profile and mod folders itself,
+so launching through MO2 is optional; you can also run it directly.
 
-Если редактор лежит внутри папки игры, он берёт эту игру автоматически.
-Настройки, кэш и логи: %LOCALAPPDATA%\STBEditor
+If the editor is inside the game folder, it detects that game automatically.
+Settings, cache and logs: %LOCALAPPDATA%\STBEditor
 "@ | Set-Content -Encoding utf8 (Join-Path $stage "README.txt")
 
 if (Test-Path $zip) { Remove-Item $zip -Force }

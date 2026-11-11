@@ -1,130 +1,131 @@
-# Рендер
+# Rendering
 
-`Editor.Render/SceneRenderer.cs` + HLSL в `Shaders.cs`. Цель — «близко к игре» с переключением
-режимов как в CK, а не точная копия игрового конвейера.
+`Editor.Render/SceneRenderer.cs` + HLSL in `Shaders.cs`. Rendering approximates the game with
+CK-style display modes; it is not an exact copy of the game's pipeline. Repository guidance:
+[AGENTS.md](../AGENTS.md).
 
-Окно рендера: инструменты редактирования отделены от **Отображения**, **Камеры** и **Пресета**.
-В узком окне камера/пресеты находятся в «Отображении», Havok/создание — в «Инструментах».
-Счётчики и координаты доступны в **Отображение → Диагностика**; там же включается подробный overlay.
-Переключение раскладок не пересоздаёт сцену; `RenderWindow.Update` завершает фоновые операции и при скрытом окне.
-Секции toolbar и инструменты используют `Ui/Studio.cs`; кромки и выбранные docking-вкладки задаются
-`Theme.Surfaces` для каждой палитры. Это только оболочка, проходы сцены и состояния редактирования общие.
-Когда высоты/ширины недостаточно, те же команды сворачиваются в **Инструменты / Вид**, а не занимают
-всё место сцены: иначе viewport перестаёт рисоваться и его модели не догружаются.
-В раскладке «Записи» Preview — вкладка рядом с Inspector, не нижний dock; общий renderer/mesh cache сохранён.
+The render window separates editing tools from **Show**, **Display**, **Camera**, and **Preset**.
+In narrow windows, camera/presets move into Display, and Havok/creation into Tools.
+Counters, coordinates, and the detailed overlay are under **Display → Diagnostics**.
+Switching layouts does not recreate the scene; `RenderWindow.Update` finishes background work even while hidden.
+Toolbar sections and tools use `Ui/Studio.cs`; edges and selected docking tabs use
+`Theme.Surfaces` for each palette. This is window chrome only: scene passes and editing state are shared.
+When height/width is insufficient, the same commands collapse into **Tools / Display** instead of consuming
+the entire scene area: otherwise the viewport stops drawing and its models cannot finish loading.
+In the Records layout, Preview is a tab beside Inspector rather than a bottom dock; the renderer/mesh cache remains shared.
 
-Это описание текущего кода, включая Unreleased-оболочку и обновление Bepu после 0.76.0,
-не отчёт о проверке всех моделей игры. Актуальные приоритеты — [PLAN.md](PLAN.md).
-Через [AI/MCP](AI-BRIDGE.md) совместимый клиент может получать этот же viewport/камеру и делать пометки;
-мост не добавляет игровой renderer и не является SKSE live-link.
+This describes the current code, including the Unreleased shell and Bepu update after 0.76.0,
+not verification of every game model.
+Through [AI/MCP](AI-BRIDGE.md), compatible clients can access the same viewport/camera and add annotations;
+the bridge does not add a game renderer and is not an SKSE live link.
 
-## Кадр
+## Frame
 
-1. Константы кадра: камера, солнце/амбиент из XCLL/LGTM ячейки, туман, до 32 ближайших точечных
-   источников, оси камеры (для билбордов и частиц), время анимации.
-2. Ландшафт: базовый слой + альфа-слои по квадрантам.
-3. Непрозрачные шейпы — инстансингом (одна отрисовка на шейп для всех рефов модели).
-4. Вода — плоскости.
-5. Прозрачные шейпы и частицы — сортировка от дальних к ближним; части одного объекта держат порядок NIF.
-   После blended pass рисуется навмеш: mist-карточки не накрывают overlay.
-   Обычный режим учитывает глубину; near/far копии слегка подтянуты к камере, дальняя бледно показывает
-   навмеш под низким щебнем/коврами. Режимы W — обычный / поверх всего / только навмеш.
-6. Маркеры, обводка выделения, линии (радиус света, границы ячеек), примитивы рефов (`DrawPrimitives`, только с
-   Markers: заливка альфой 0x22 + рёбра; комнаты/порталы/multibound/occlusion и коробка вокруг камеры — только рёбра).
+1. Frame constants: camera, sun/ambient from the cell's XCLL/LGTM, fog, up to 32 nearest point
+   lights, camera axes (for billboards and particles), animation time.
+2. Landscape: base layer + alpha layers per quadrant.
+3. Opaque shapes: instanced (one draw per shape for all references of a model).
+4. Water: planes.
+5. Transparent shapes and particles: sorted back to front; parts of an object retain NIF order.
+   Navmesh is drawn after the blended pass so mist cards do not cover its overlay.
+   Normal mode respects depth; near/far copies are pulled slightly toward the camera, with the faint
+   far copy revealing navmesh beneath low rubble/carpets. W modes: normal / on top / navmesh only.
+6. Markers, selection outline, lines (light radius, cell boundaries), reference primitives (`DrawPrimitives`,
+   with Markers only: alpha 0x22 fill + edges; rooms/portals/multibound/occlusion and the box around the camera use edges only).
 
-Reversed-Z, бесконечная дальняя плоскость; треугольники NIF — CCW.
+Reversed-Z, infinite far plane; NIF triangles are CCW.
 
-## Материалы
+## Materials
 
-- **BSLightingShaderProperty** — diffuse, нормали (tangent / model-space), specular, glow map,
-  own emit, hair tint. Освещение — Ламберт + Блинн, без теней.
-- **BSEffectShaderProperty** — как в игре (сверено с `Community Shaders/Shaders/Effect.hlsl`):
-  - базовый цвет = emissive colour × цвет вершины (rgb и альфа);
-  - альфа = (альфа текстуры, или 1 при greyscale-to-alpha) × альфа базового цвета × альфа материала;
-  - **greyscale to palette alpha**: альфа = палитра(u = альфа текстуры, v = альфа);
-  - **greyscale to palette color**: цвет = emissive multiple × палитра(u = зелёный канал текстуры, v = красный канал базового цвета);
-  - иначе цвет = базовый цвет × emissive multiple × текстура.
-  Палитры двумерные (например 512×128): сверху тёмные/прозрачные строки, снизу яркие.
-- Refraction (марево) не рисуется: в слоте diffuse там карта нормалей.
-- NiAlphaProperty: blend-факторы из флагов, alpha test с порогом.
+- **BSLightingShaderProperty**: diffuse, tangent/model-space normals, specular, glow map,
+  own emission, hair tint. Lambert + Blinn lighting, without shadows.
+- **BSEffectShaderProperty** follows the game (checked against `Community Shaders/Shaders/Effect.hlsl`):
+  - base color = emissive color × vertex color (RGB and alpha);
+  - alpha = (texture alpha, or 1 for greyscale-to-alpha) × base-color alpha × material alpha;
+  - **greyscale to palette alpha**: alpha = palette(u = texture alpha, v = alpha);
+  - **greyscale to palette color**: color = emissive multiplier × palette(u = texture green, v = base-color red);
+  - otherwise color = base color × emissive multiplier × texture.
+  Palettes are two-dimensional (for example 512×128): dark/transparent rows at the top, bright rows at the bottom.
+- Refraction (heat haze) is not drawn: its diffuse slot contains a normal map.
+- NiAlphaProperty: blend factors from flags, alpha test with threshold.
 
-## Анимация шейдеров
+## Shader animation
 
 `BSEffectShaderPropertyFloatController` / `BSLightingShaderPropertyFloatController` → `NifFloatAnimation`:
-U/V offset и scale (бегущая вода, листание атласа пламени), alpha, emissive multiple. Ключи NiFloatData
-(линейные, ступенчатые; квадратичные и TBC считаются линейно), время по NiTimeController
-(frequency, phase, start/stop, loop / reverse / clamp). Цветовые контроллеры и NiTransformController
-пока не проигрываются.
+U/V offset and scale (flowing water, flame-atlas frames), alpha, emissive multiplier. NiFloatData keys
+are linear or stepped; quadratic and TBC keys are treated as linear. Timing follows NiTimeController
+(frequency, phase, start/stop, loop / reverse / clamp). Color controllers and NiTransformController
+are not played.
 
-## Билборды
+## Billboards
 
-Шейпы под `NiBillboardNode` хранятся в собственной системе координат узла (масштаб без поворота) вокруг
-его позиции. Вершинный шейдер ставит локальные X/Y в правую/верхнюю ось экрана, +Z — к камере
-(ALWAYS/RIGID_FACE_CAMERA/CENTER), или крутит вокруг оси «вверх» узла (ROTATE_ABOUT_UP).
-Пикинг билборды пропускает, в габариты для «уронить на землю» и кадрирования Preview они не входят.
+Shapes beneath `NiBillboardNode` retain the node's local coordinates (scale without rotation) around
+its position. The vertex shader maps local X/Y to screen right/up and +Z toward the camera
+(ALWAYS/RIGID_FACE_CAMERA/CENTER), or rotates around the node's up axis (ROTATE_ABOUT_UP).
+Picking skips billboards; they do not contribute to drop-to-ground bounds or Preview framing.
 
-## Частицы
+## Particles
 
-![Костёр: пламя, дым, угли](images/campfire.png)
+![Campfire: flame, smoke, embers](images/campfire.png)
 
-`NiParticleSystem` / `BSStripParticleSystem` разбираются в `NifParticleSystem` (`NifFile.Effects.cs`):
+`NiParticleSystem` / `BSStripParticleSystem` are parsed into `NifParticleSystem` (`NifFile.Effects.cs`):
 
-- эмиттеры box / sphere / cylinder / mesh / array, скорость, склонение и угол с разбросом, радиус, жизнь;
-- `NiPSysEmitterCtlr` — частота рождения (константа или ключи) и включённость;
-- гравитация (planar / spherical), drag, grow/fade, `BSPSysScaleModifier`, `BSPSysSimpleColorModifier`,
-  `NiPSysColorModifier`, вращение, атлас (`NiPSysData` sub-texture offsets, `BSPSysSubTexModifier`),
-  соотношение сторон и ориентация по скорости.
+- box / sphere / cylinder / mesh / array emitters, speed, declination and angle with variation, radius, lifetime;
+- `NiPSysEmitterCtlr`: birth rate (constant or keyed) and enabled state;
+- gravity (planar / spherical), drag, grow/fade, `BSPSysScaleModifier`, `BSPSysSimpleColorModifier`,
+  `NiPSysColorModifier`, rotation, atlas (`NiPSysData` sub-texture offsets, `BSPSysSubTexModifier`),
+  aspect ratio and velocity alignment.
 
-Не моделируются: рождение при смерти, коллайдеры, ветер, поля, LOD-модификатор, ленты (strip) рисуются
-обычными квадами.
+Not simulated: spawn-on-death, colliders, wind, fields, LOD modifier. Strips are drawn as ordinary quads.
 
-Симуляция — на CPU в пространстве модели (`Particles.cs`), шаг 1/30 с; одна симуляция на систему
-частиц модели, общая для всех рефов (все факелы горят одинаково — так дешевле). Новая система сразу
-«прогревается» на время жизни частиц. Квады разворачиваются к камере в `VSParticle`. Дальше 9000 единиц
-частицы не считаются. **Отображение → Частицы / Анимации** выключает частицы / замораживает время.
+CPU simulation runs in model space (`Particles.cs`) at 1/30 s steps; each model particle system has one
+simulation shared by all references (all torches burn identically, reducing cost). New systems are
+immediately warmed up over the particle lifetime. `VSParticle` turns quads toward the camera.
+Particles beyond 9000 units are not simulated. **Display → Particles / Animations** disables particles / freezes time.
 
-## NPC и существа
+## NPCs and creatures
 
-![Оргнар: одежда, FaceGen-лицо, волосы](images/npc-orgnar.png)
-![Существа в позе привязки](images/creatures.png)
+![Orgnar: clothing, FaceGen face, hair](images/npc-orgnar.png)
+![Creatures in bind pose](images/creatures.png)
 
-Актёр (ACHR) рисуется составной моделью из нескольких NIF (`ActorAppearance.cs`, ключ кэша
+An actor (ACHR) is rendered as a composite of several NIFs (`ActorAppearance.cs`, cache key
 `actor:a.nif|b.nif|…`):
 
-1. База NPC_ или LVLN (у LVLN — первая запись по уровню), шаблоны: внешность — по флагу
-   *Traits*, одежда — по флагу *Inventory*.
-2. Раса (и её ArmorRace) выбирает, какой ARMA каждой брони подходит; пол — мужская/женская модель.
-3. Сначала default outfit (уровневые списки — первая запись, или все при *Use All*), затем кожа
-   (worn armor NPC или skin расы) — только в незанятые слоты. Часть кожи прячется, если занят её
-   главный слот: слот тела (32), а без него — младший (голое тело под рубахой уходит, тело драугра
-   под одним шлемом остаётся).
-4. Голова — готовый FaceGen: `meshes\actors\character\facegendata\facegeom\<плагин NPC>\<локальный FormID:X8>.nif`
-   (для NPC с шаблоном по Traits — FaceGen шаблона). Нет файла — head parts NPC (или расы), без морфов.
-5. Масштаб = рост NPC × рост расы × масштаб рефа.
+1. NPC_ or LVLN base (first entry by level for LVLN); templates supply appearance under
+   *Traits* and clothing under *Inventory*.
+2. Race (and its ArmorRace) selects the appropriate ARMA for each armor; sex selects the male/female model.
+3. Default outfit first (first leveled-list entry, or all with *Use All*), then skin
+   (NPC worn armor or race skin) in unoccupied slots only. A skin part is hidden when its main
+   slot is occupied: body slot (32), otherwise its lowest slot (a bare body disappears under a shirt,
+   but a draugr body remains under a helmet alone).
+4. Head: prebuilt FaceGen at `meshes\actors\character\facegendata\facegeom\<NPC plugin>\<local FormID:X8>.nif`
+   (template FaceGen for NPCs inheriting Traits). Without the file, NPC/race head parts are used without morphs.
+5. Scale = NPC height × race height × reference scale.
 
-Скиннинг: в SSE вершины скиннинговых шейпов лежат в `NiSkinPartition` (общий буфер; индексы
-треугольников разделов — уже глобальные), в LE — в данных шейпа. Вершины переводятся в позу
-привязки линейным смешиванием: узел кости из того же NIF × skin transform кости из `NiSkinData`,
-веса — из `NiSkinData` или разделов. Скелет расы и анимации не применяются: актёры стоят в
-позе привязки (руки чуть в стороны), как в NifSkope.
+Skinning: SSE skinned-shape vertices are in `NiSkinPartition` (shared buffer; partition triangle indices
+are already global), while LE uses shape data. Vertices are transformed to bind pose by linear blending:
+bone node from the same NIF × bone skin transform from `NiSkinData`, with weights from `NiSkinData` or
+partitions. Race skeletons and animations are not applied: actors remain in bind pose (arms slightly
+outward), as in NifSkope.
 
-Шейдеры: FaceGen-голова — tint (слот 6) и detail (слот 3) по формуле `GetFacegenBaseColor` из
-Lighting.hlsl; волосы — `lerp(1, цвет волос, зелёный канал вершины)`.
+Shaders: FaceGen heads use tint (slot 6) and detail (slot 3) with `GetFacegenBaseColor` from
+Lighting.hlsl; hair uses `lerp(1, hair color, vertex green)`.
 
-Не сделано: оттенок кожи тела (skin tint), прятанье волос под шлемом, оружие в руках, позы/анимации.
+Not implemented: body skin tint, hiding hair beneath helmets, held weapons, poses/animations.
 
-## Коллизия
+## Collision
 
-`NifFile.Collision.cs` читает Havok в треугольники и выпуклые части. `MeshCache.CollisionLines` строит
-рёбра для F4 (также при загрузке модели миниатюры), `PhysicsDrop` — динамические тела, `NavmeshGeometry`
-может брать эту геометрию для генерации. Все три используют один закреплённый Bepu **2.5.0-beta.33**.
-В 2.4 численная петля в `ConvexHullHelper.ReduceFace` переполняла unmanaged-список и роняла процесс
-с `0xc0000005`; [upstream #301](https://github.com/bepu/bepuphysics2/issues/301) описывает тот же механизм.
-Фильтр тонких частей `SafePiece` не заменяет исправление обхода. `stbedit-cli collisiontest` проверяет
-геометрию рёбер и инерцию, включая публичный численно сложный набор точек; игре и модам ничего не пишет.
+`NifFile.Collision.cs` reads Havok into triangles and convex pieces. `MeshCache.CollisionLines` builds
+edges for F4 (including thumbnail-model loading); `PhysicsDrop` builds dynamic bodies, and `NavmeshGeometry`
+can use this geometry for generation. All three use pinned Bepu **2.5.0-beta.33**.
+In 2.4, a numerical loop in `ConvexHullHelper.ReduceFace` overflowed an unmanaged list and crashed the process
+with `0xc0000005`; [upstream #301](https://github.com/bepu/bepuphysics2/issues/301) describes the same mechanism.
+The `SafePiece` thin-piece filter does not replace the traversal fix. `stbedit-cli collisiontest` checks
+edge geometry and inertia, including a public numerically difficult point set; it writes nothing to game/mod folders.
 
-## Что дальше
+## Current limitations
 
-- Тени, отражения, параллакс, снег и показ дальнего LOD — не в ближайшей очереди, пока нет отдельного запроса.
-  Это не обещание точного совпадения с игровым освещением. Облака, осадки и image space погоды пока не рисуются.
-- Свой LOD-генератор не планируется (xLODGen / TexGen / DynDOLOD); это отдельный вопрос от показа LOD в viewport.
+Shadows, reflections, parallax, snow, and distant LOD display are not implemented. Rendering does not
+promise exact agreement with game lighting. Weather clouds, precipitation, and image space are not drawn.
+The editor has no LOD generator; xLODGen / TexGen / DynDOLOD are external tools. Generating LOD and
+displaying it in the viewport are separate capabilities.

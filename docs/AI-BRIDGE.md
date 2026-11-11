@@ -1,19 +1,19 @@
-# AI / MCP: доступ к открытой сессии STB Editor
+# AI / MCP: access to an open STB Editor session
 
-Необязательный локальный MCP-сервер связывает **совместимый MCP-клиент** с запущенным редактором.
-Модель выбирает клиент: мост не зависит от Claude и не требует API-ключа поставщика модели.
-Самостоятельная модель без MCP-клиента/адаптера подключиться не сможет.
-Обобщение названий и разрешений относится к **Unreleased** после 0.76.0.
+An optional local MCP server connects a **compatible MCP client** to the running editor.
+The client chooses the model: the bridge does not depend on Claude or require a model provider's API key.
+A model alone cannot connect without an MCP client or adapter.
+The generalized names and permissions are **Unreleased**, after 0.76.0.
 
-**По умолчанию выключено.** Окно — **Вид → AI / MCP**; настройки — **Вид → Настройки → AI / MCP**.
-Прямые правки выключены отдельно; выполнение C# требует третьего, более опасного разрешения.
+**Off by default.** Open **View → AI / MCP**; settings are under **View → Settings → AI / MCP**.
+Direct edits are disabled separately; running C# requires a third, more dangerous permission.
 
-## Подключение любого совместимого клиента
+## Connecting a compatible client
 
-1. Включить мост в настройках или окне AI / MCP. Загрузить данные редактора.
-2. Указать в клиенте HTTP MCP endpoint: **`http://127.0.0.1:47110/mcp`**.
-   Порт настраивается в редакторе; использовать показанный там адрес.
-3. Типовой JSON конфигурации клиента:
+1. Enable the bridge in settings or the AI / MCP window. Load the editor's data.
+2. Set the client's HTTP MCP endpoint to **`http://127.0.0.1:47110/mcp`**.
+   The port is configurable; use the address displayed in the editor.
+3. A typical client configuration:
 
    ```json
    {
@@ -26,103 +26,106 @@
    }
    ```
 
-Это пример формата клиентов с `mcpServers`, не универсальная схема всех приложений:
-названия полей/способ регистрации смотреть в документации своего клиента.
-Нужна поддержка Streamable HTTP с JSON-ответами; сервер согласовывает версию MCP `2025-03-26`,
-а не обещает поддержку произвольной версии клиента. SSE и stdio-команды нет; клиенту только со
-stdio потребуется внешний адаптер. Точные параметры инструментов клиент получает через `tools/list`.
-Для загруженных записей ID обычно имеет вид `00012EB7`; для черновика ещё не загруженного
-плагина — `000800:MyPlugin.esp`. Передавайте возвращённый ID обратно без изменения.
+This illustrates clients using `mcpServers`, not a universal application schema:
+consult your client's documentation for its field names and registration procedure.
+The client needs Streamable HTTP support with JSON responses. The server negotiates MCP version
+`2025-03-26`, not arbitrary client versions. There is no SSE transport or stdio command;
+a stdio-only client needs an external adapter. Clients obtain exact tool parameters through `tools/list`.
+Loaded record IDs usually look like `00012EB7`; a draft in a plugin not yet loaded may use
+`000800:MyPlugin.esp`. Pass returned IDs back unchanged.
 
-### Отдельно: необязательный launcher Claude Code
+<details>
+<summary>Optional Claude Code launcher</summary>
 
-В свёрнутом разделе **Claude Code** окна AI / MCP можно запустить существующий `claude -p`
-через «Спросить Claude»: показываются ответы и вызовы инструментов, поддерживается продолжение
-разговора. Нужен установленный и авторизованный Claude Code; он использует ваш аккаунт.
-Это только один launcher, не поддержка других CLI/провайдеров в этом поле.
+The collapsed **Claude Code** section in the AI / MCP window can run an existing `claude -p`
+through **Ask Claude**, displaying replies and tool calls and supporting conversation continuation.
+Claude Code must be installed and authenticated; it uses your account.
+This is one optional launcher, not support for other CLIs or providers in that field.
 
-Для внешнего Claude Code вместо встроенного launcher:
+For external Claude Code instead of the built-in launcher:
 
 ```text
 claude mcp add --scope user --transport http stb-editor http://127.0.0.1:47110/mcp
 ```
 
-## Где мост действительно полезен
+</details>
 
-- **Несохранённый документ:** правки, активный файл, выделение и история undo не видны при чтении
-  только ESP с диска.
-- **Загруженная сцена:** камера, снимок viewport, picking, метки пользователя (**K**) и видимые объекты
-  позволяют обсуждать конкретное место, а не гадать по координатам в файле.
-- **Структурированные операции:** FormKey и пути полей, обычные команды редактора/undo,
-  предложения с явным «Применить» / «Отклонить» вместо прямой перезаписи плагина.
+## Where the bridge helps
 
-У coding-агента с shell и исходниками нет принципиального запрета на эти возможности: он может
-реализовать альтернативный IPC или тестовый harness. Мост — готовый и контролируемый путь к живой
-сессии без такой разработки, не «магическая» способность Claude. Для правок исходников репозитория,
-сборки или офлайн-анализа файлов обычный coding-агент часто достаточен; мост не заменяет эти инструменты.
-Он также не подключается к работающему Skyrim и не является SKSE live-link.
+- **Unsaved document:** edits, the active file, selection and undo history are not available by
+  reading only the ESP on disk.
+- **Loaded scene:** the camera, viewport screenshot, picking, user marks (**K**) and visible objects
+  provide a concrete place to discuss instead of guessing from file coordinates.
+- **Structured operations:** FormKeys and field paths, normal editor commands and undo,
+  and proposals with explicit **Apply / Reject**, rather than directly overwriting a plugin.
 
-## Инструменты
+A coding agent with a shell and source access is not inherently excluded from these capabilities:
+it can implement alternative IPC or a test harness. The bridge is a ready-made, controlled route
+into the live session without that development, not a special ability of Claude. An ordinary coding
+agent is often sufficient for repository source edits, builds or offline file analysis; the bridge
+does not replace those tools. It does not connect to running Skyrim and is not an SKSE live-link.
 
-| Инструмент | Назначение |
+## Tools
+
+| Tool | Purpose |
 |---|---|
-| `get_status` | плагины, активный файл, несохранённое, ячейка, камера, выделение, метки; `ai_may_change` и `ai_may_run_scripts` |
-| `screenshot` | снимок viewport с пометками и overlay; ожидает загрузки моделей/текстур |
-| `set_camera`, `look_at`, `load_cell` | камера, вид на объект, загрузка ячейки/сетки мира |
-| `list_objects`, `pick`, `select` | объекты рядом, объект под точкой снимка, выделение |
-| `move_objects`, `place_object`, `delete_objects` | структурированные правки объектов обычными командами undo |
-| `undo` | отмена / возврат шагов |
-| `find_records`, `get_record`, `set_field` | поиск, поля записи, правка по пути (`Name`, `Configuration.HealthOffset`, `Keywords[1]`) |
-| `use_info`, `framework_info` | ссылки/места в мире, конфиги SKSE-фреймворков, SPID для NPC |
-| `annotate`, `clear_annotations`, `get_user_marks` | пометки поверх сцены и метки пользователя K |
-| `propose_changes`, `proposal_status` | предварительный показ сдвигов/поворотов/удалений; пользователь применяет одним undo-шагом или отклоняет |
-| `get_journal` | лог сессии, история undo, последний отчёт о вылете |
-| `run_script` | произвольный C# через существующий ScriptHost, только при отдельном разрешении |
+| `get_status` | Plugins, active file, unsaved changes, cell, camera, selection, marks; `ai_may_change` and `ai_may_run_scripts` |
+| `screenshot` | Viewport screenshot with annotations and overlay; waits for models and textures to load |
+| `set_camera`, `look_at`, `load_cell` | Camera, focus on an object, load a cell or world grid |
+| `list_objects`, `pick`, `select` | Nearby objects, object under a screenshot point, selection |
+| `move_objects`, `place_object`, `delete_objects` | Structured object edits through normal undo commands |
+| `undo` | Undo or redo steps |
+| `find_records`, `get_record`, `set_field` | Search, record fields, editing by path (`Name`, `Configuration.HealthOffset`, `Keywords[1]`) |
+| `use_info`, `framework_info` | References and placements, SKSE framework configs, SPID for NPCs |
+| `annotate`, `clear_annotations`, `get_user_marks` | Scene annotations and user K marks |
+| `propose_changes`, `proposal_status` | Preview moves, rotations and deletions; the user applies them as one undo step or rejects them |
+| `get_journal` | Session log, undo history, latest crash report |
+| `run_script` | Arbitrary C# through the existing ScriptHost, only with separate permission |
 
-Предложения доступны и без разрешения прямых правок: **Enter / «Применить»** или
-**Backspace / «Отклонить»** решает пользователь. Предварительное положение объектов ещё не является
-записанной командой документа. Предложения не охватывают произвольные правки полей/скрипты.
+Proposals are available without direct-edit permission: the user decides with **Enter / Apply**
+or **Backspace / Reject**. Preview object positions are not yet recorded document commands.
+Proposals do not cover arbitrary field edits or scripts.
 
-## Разрешения и границы безопасности
+## Permissions and safety boundaries
 
-| Настройка | По умолчанию | Что разрешает |
+| Setting | Default | Allows |
 |---|---|---|
-| `AiBridge` | `false` | локальный HTTP-сервер, просмотр, навигацию, снимки, пометки, предложения |
-| `AiBridgePort` | `47110` | порт endpoint |
-| `AiBridgeEdits` | `false` | прямые структурированные правки и undo через мост |
-| `AiBridgeScripts` | `false` | дополнительно `run_script`; требует также включённых моста и прямых правок |
+| `AiBridge` | `false` | Local HTTP server, inspection, navigation, screenshots, annotations, proposals |
+| `AiBridgePort` | `47110` | Endpoint port |
+| `AiBridgeEdits` | `false` | Direct structured edits and undo through the bridge |
+| `AiBridgeScripts` | `false` | Additionally, `run_script`; requires both the bridge and direct edits to be enabled |
 
-- Сервер слушает `127.0.0.1`; запросы с посторонним браузерным `Origin` отклоняются.
-  Это не аутентификация локальных процессов: разрешённый доступ относится ко всем клиентам,
-  способным обращаться к endpoint. Не публикуйте порт через proxy/tunnel.
-- У структурированных инструментов **нет команды сохранения плагина**; их изменения остаются
-  в документе до сохранения пользователем. Это не общая гарантия «AI не пишет файлы».
-- **`run_script` не sandbox.** C# выполняется с правами процесса редактора и может читать/писать
-  файлы, запускать процессы и выполнять другой локальный код. Правки записей через предоставленный
-  API собираются в undo-команду, но внешние эффекты, файловая запись и запуск процессов не отменяются
-  через Ctrl+Z. Включать только для доверенного клиента и проверенного кода.
-- Отзыв разрешения блокирует ещё не исполненные вызовы/commit правок скрипта, но не обращает вспять
-  и не гарантирует остановку уже запущенного произвольного кода.
-- `run_script` — отдельная граница доверия даже для задач «только прочитать». При снятом разрешении
-  прямых правок этот инструмент также запрещён. Просмотр/предложения не требуют его включения.
-- История вызовов в окне помогает видеть действия клиента, но не является sandbox или доказательством
-  отсутствия побочных эффектов.
+- The server listens on `127.0.0.1`; requests with an unrelated browser `Origin` are rejected.
+  This does not authenticate local processes: permissions apply to all clients that can reach
+  the endpoint. Do not expose the port through a proxy or tunnel.
+- Structured tools have **no save-plugin command**; their changes remain in the document until
+  the user saves. This is not a general guarantee that AI cannot write files.
+- **`run_script` is UNSANDBOXED.** C# runs with the editor process's privileges and can read and
+  write files, launch processes and execute other local code. Record edits through the supplied
+  API are collected into an undo command, but external effects, file writes and process launches
+  cannot be undone with Ctrl+Z. Enable it only for a trusted client and reviewed code.
+- Revoking permission blocks queued calls and script edit commits that have not executed;
+  it neither reverses nor guarantees termination of arbitrary code already running.
+- `run_script` is a separate trust boundary even for read-only tasks. It is also forbidden when
+  direct edits are disabled. Inspection and proposals do not require it.
+- The window's call history helps show client actions, but is neither a sandbox nor proof that
+  no side effects occurred.
 
-При загрузке старых настроек `ClaudeBridge`, `ClaudeBridgePort`, `ClaudeBridgeEdits` переносятся в
-новые ключи; явно заданные новые ключи имеют приоритет. Разрешение скриптов **не наследуется**.
+When old settings load, `ClaudeBridge`, `ClaudeBridgePort` and `ClaudeBridgeEdits` migrate to
+new keys; explicitly supplied new keys take precedence. Script permission is **not inherited**.
 
-## Для разработчиков
+## For developers
 
-`src/Editor.App/Services/AiBridge.cs` обслуживает HTTP/JSON-RPC (`initialize`, `ping`, `tools/list`,
-`tools/call`), ставит вызовы в очередь UI-потока; `Pump` и `MainWindow.Wake` работают между кадрами.
-`Services/AiTools.cs` содержит инструменты; `Panels/AiWindow.cs` — настройки/историю/launcher,
-`Panels/RenderWindow.Ai.cs` — снимки, пометки, K-метки и правки через `Commit`.
-Снимок с overlay вырезается из готового back buffer (`ServeWindowShots` в Program).
-Применение предложений — `Panels/RenderWindow.Proposals.cs`.
-`Services/ClaudeChat.cs` остаётся только адаптером optional Claude Code CLI.
+`src/Editor.App/Services/AiBridge.cs` handles HTTP/JSON-RPC (`initialize`, `ping`, `tools/list`,
+`tools/call`) and queues calls for the UI thread; `Pump` and `MainWindow.Wake` run between frames.
+`Services/AiTools.cs` contains the tools; `Panels/AiWindow.cs` contains settings, history and the launcher;
+`Panels/RenderWindow.Ai.cs` handles screenshots, annotations, K marks and edits through `Commit`.
+Screenshots with overlays are cropped from the finished back buffer (`ServeWindowShots` in Program).
+Proposals are applied in `Panels/RenderWindow.Proposals.cs`.
+`Services/ClaudeChat.cs` remains only an adapter for the optional Claude Code CLI.
 
-Пример без модели через [официальный Python SDK](https://github.com/modelcontextprotocol/python-sdk)
-(`mcp` 2.x в отдельном venv; мост и данные редактора уже включены):
+A model-free example using the [official Python SDK](https://github.com/modelcontextprotocol/python-sdk)
+(`mcp` 2.x in a separate venv; the bridge and editor data must already be enabled):
 
 ```python
 import asyncio
@@ -138,6 +141,6 @@ async def main():
 asyncio.run(main())
 ```
 
-Это способ проверить endpoint, а не отчёт о прохождении тестов. При проверке разрешений нужно отдельно
-проверять запрет прямых правок, запрет `run_script`, применение/отклонение предложений и отсутствие
-побочных изменений; для сценариев записи использовать scratch-файлы вне игры и модов.
+This is an endpoint-checking example, not a report of tests passing. Permission checks must separately
+cover denied direct edits, denied `run_script`, applying and rejecting proposals, and the absence of
+side effects. Use scratch files outside the game and mod directories for write scenarios.

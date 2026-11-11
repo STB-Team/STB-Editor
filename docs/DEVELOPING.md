@@ -1,405 +1,409 @@
-# Разработка STB Editor
+# Developing STB Editor
 
-Документ для тех, кто будет дописывать редактор: как собрать, как устроен код, как проверять
-изменения без человека у экрана и какие правила уже стоили нам дорого.
+A guide to building the editor, its implemented architecture, unattended checks, and hard-won invariants.
+Repository operating guidance: [AGENTS.md](../AGENTS.md).
 
-## Сборка
+## Building
 
-- .NET SDK 10 (`global.json`: 10.0.100, roll-forward latestFeature; обычно `C:\Program Files\dotnet`),
-  Windows 10/11 x64, видеокарта с D3D11. Оба GitHub Actions workflow используют `10.0.x`.
-- `dotnet build STB-Editor.sln -c Debug` — всё решение.
-- `src\Editor.App\bin\Debug\net10.0-windows\win-x64\STBEditor.exe --game C:\Skyrim --open` — запуск на сборке.
-- `package.ps1` — портативный self-contained архив в `dist\`.
-- Релиз: раздел `## <версия>` в `CHANGELOG.md` → коммит → `git tag v<версия>` → `git push origin v<версия>`.
-  GitHub Actions (`.github/workflows/release.yml`) соберёт архив тем же `package.ps1` и выложит его в Releases
-  с этим разделом changelog как описанием. Сборка на каждый push в `main` и PR — `.github/workflows/build.yml`.
-- Диагностическая консоль: `dotnet build src/Editor.Cli -c Release -o build/cli`, затем
-  `build\cli\stbedit-cli.exe <команда> <папка игры> …` (список ниже).
+- .NET SDK 10 (`global.json`: 10.0.100, roll-forward latestFeature; usually `C:\Program Files\dotnet`),
+  Windows 10/11 x64, D3D11 GPU. Both GitHub Actions workflows use `10.0.x`.
+- `dotnet build STB-Editor.sln -c Debug` builds the solution.
+- `src\Editor.App\bin\Debug\net10.0-windows\win-x64\STBEditor.exe --game C:\Skyrim --open` runs against a game installation.
+- `package.ps1` creates the portable self-contained archive in `dist\`.
+- Release: `## <version>` in `CHANGELOG.md` → commit → `git tag v<version>` → `git push origin v<version>`.
+  GitHub Actions (`.github/workflows/release.yml`) builds with the same `package.ps1` and publishes to Releases,
+  using that changelog section as release notes. Pushes to `main` and PRs build through `.github/workflows/build.yml`.
+- Diagnostic console: `dotnet build src/Editor.Cli -c Release -o build/cli`, then
+  `build\cli\stbedit-cli.exe <command> <game-folder> …` (commands below).
 
-Зависимости (NuGet): Mutagen.Bethesda.Skyrim (плагины), Hexa.NET.ImGui + Backends + ImGuizmo (UI),
-Vortice.Direct3D11 / D3DCompiler (рендер), BepuPhysics (падение/оболочки), DotRecast (навмеш),
-Roslyn (C#-скрипты). Основной шрифт Segoe UI — из Windows, игровые заголовки ищутся в сборке
-пользователя (`Ui/Theme.cs`); игровые шрифты не поставляются.
+NuGet dependencies: Mutagen.Bethesda.Skyrim (plugins), Hexa.NET.ImGui + Backends + ImGuizmo (UI),
+Vortice.Direct3D11 / D3DCompiler (rendering), BepuPhysics (dropping/hulls), DotRecast (navmesh),
+Roslyn (C# scripts). The primary Segoe UI font comes from Windows; game heading fonts are located in
+the user's installation (`Ui/Theme.cs`). Game fonts are not distributed.
 
-## Устройство
+## Architecture
 
 ```
 src/
-  Editor.Data     без UI: установка игры, MO2, load order, Workspace (Mutagen), каталог записей,
-                  сырой слой TES4 (Raw/: заголовки, обход записей, RawSplice для записи байт-в-байт)
-  Editor.Assets   AssetFileSystem: loose-файлы по приоритету MO2 поверх BSA
-  Editor.Nif      ручное чтение NIF для рендера, коллизии и эффекты; block-level writer для FaceGen, не общий NIF-редактор
-  Editor.Render   D3D11: кэши мешей/текстур, сцена, SceneBuilder (ячейки → объекты), SceneRenderer,
-                  частицы (Particles.cs), пикинг, камера
-  Editor.Core     правки: EditDocument + undo, ActivePlugin (FormID), PluginWriter (сохранение)
-  Editor.App      окно Win32, ImGui, панели (Panels/), сервисы (сохранение, логи, настройки)
-  Editor.Cli      диагностика без окна
+  Editor.Data     No UI: game installation, MO2, load order, Workspace (Mutagen), record catalog,
+                  raw TES4 layer (Raw/: headers, record traversal, byte-preserving RawSplice)
+  Editor.Assets   AssetFileSystem: loose files by MO2 priority over BSAs
+  Editor.Nif      Handwritten rendering NIF reader, collision/effects; block-level FaceGen writer, not a general NIF editor
+  Editor.Render   D3D11: mesh/texture caches, scene, SceneBuilder (cells → objects), SceneRenderer,
+                  particles (Particles.cs), picking, camera
+  Editor.Core     Edits: EditDocument + undo, ActivePlugin (FormID), PluginWriter (saving)
+  Editor.App      Win32 window, ImGui, panels (Panels/), services (saving, logs, settings)
+  Editor.Cli      Windowless diagnostics
 ```
 
-Поток данных: `Workspace` (load order + Mutagen overlays) → `RecordCatalog` (все непомещённые записи)
-→ `SceneBuilder` строит `Scene` ячейки/сетки ячеек → `SceneRenderer` рисует, `Picking` выбирает →
-правки идут в `EditDocument` (состояния рефов + undo) → `PluginWriter` пишет активный плагин.
+Data flow: `Workspace` (load order + Mutagen overlays) → `RecordCatalog` (all non-placed records)
+→ `SceneBuilder` builds a cell/cell-grid `Scene` → `SceneRenderer` draws and `Picking` selects
+→ edits enter `EditDocument` (reference states + undo) → `PluginWriter` writes the active plugin.
 
-Это текущая реализованная архитектура; SQLite, NIF-codegen, отдельные Editor.Tools/tests и SKSE live-link
-были ранними идеями, не существующими проектами. [PLAN.md](PLAN.md) описывает нынешние решения,
-[ANALYSIS.md](ANALYSIS.md) сохраняет историческое исследование.
+The optional [AI/MCP bridge](AI-BRIDGE.md), `Services/AiBridge.cs` / `AiTools.cs` and
+`Panels/AiWindow.cs` / `RenderWindow.Ai.cs`, exposes the live unsaved session to compatible clients;
+it is not a model provider. `ClaudeChat.cs` is only an optional launcher for installed Claude Code.
+`AiBridge`, `AiBridgeEdits`, and `AiBridgeScripts` default to false. Arbitrary `run_script` is not sandboxed:
+it requires all three permissions, and external file/process side effects cannot be undone.
+The absence of a structured save command does not mean AI cannot write files.
 
-Необязательный [AI/MCP-мост](AI-BRIDGE.md) — `Services/AiBridge.cs` / `AiTools.cs`,
-`Panels/AiWindow.cs` / `RenderWindow.Ai.cs`: доступ совместимого клиента к живой несохранённой сессии,
-а не поставщик модели. `ClaudeChat.cs` — только отдельный optional launcher установленного Claude Code.
-`AiBridge`, `AiBridgeEdits`, `AiBridgeScripts` по умолчанию false. Произвольный `run_script` не sandbox:
-ему нужны все три разрешения, внешние файловые/процессные эффекты не откатываются через undo.
-Не обобщать отсутствие структурированной команды save до «AI не может писать файлы».
+New records (cells, worlds) are **drafts** (`Core/EditDocument.cs`: `CellDraft`, `WorldDraft`): ordinary
+mutable Mutagen `Cell`/`Worldspace` records held in the document until saving. `Core/NewRecords.cs`
+creates them. Landscape edits use `LandDraft` with `Core/LandscapeData.cs` (world-unit heights,
+quadrant layers; VHGT/VNML/VCLR/BTXT/ATXT output); brush strokes use `LandStrokeCommand`
+(`Panels/RenderWindow.Landscape.cs`, `LandscapePanel`). Existing-record edits use `OverrideDraft`
+(`Core/Overrides.cs`): a mutable copy (`WorkingCopy` → mutation → `CommitEdit`, before/after snapshots
+for undo). `RecordPlace` identifies placement in the plugin (type group, reference cell, navmesh).
+`SceneBuilder.Document` builds scenes from drafts just like loaded records; `PluginWriter` adds them
+before references. Creation is an undo command (`DraftCommand`, or `CompositeCommand` with references).
 
-Новые записи (ячейки, миры) — **черновики** (`Core/EditDocument.cs`: `CellDraft`, `WorldDraft`): это
-обычные изменяемые записи Mutagen (`Cell`, `Worldspace`), которые живут в документе до сохранения.
-Их создают `Core/NewRecords.cs`; правки земли — `LandDraft` с `Core/LandscapeData.cs` (высоты в
-единицах мира, слои по четвертям; запись в VHGT/VNML/VCLR/BTXT/ATXT), мазок кисти — `LandStrokeCommand`
-(`Panels/RenderWindow.Landscape.cs`, панель `LandscapePanel`); правки существующих записей —
-`OverrideDraft` (`Core/Overrides.cs`): изменяемая копия записи (`WorkingCopy` → правка → `CommitEdit`,
-снимок до/после = undo), место в плагине — `RecordPlace` (группа типа, ячейка рефа, навмеш); `SceneBuilder` (свойство `Document`) строит из них сцены как из
-загруженных записей; `PluginWriter` добавляет их в плагин раньше рефов. Создание — команда undo
-(`DraftCommand`, вместе с рефами — `CompositeCommand`).
+Each UI panel is a `Panel` subclass in `Editor.App/Panels`; layouts are in `Panels/Panel.cs`
+(`DefaultLayout`, `LayoutPreset`), and the workspace strip is in `Panels/EditorShell.cs`.
+`EditorApp.ApplyLayout` changes visibility/docking only: `EditDocument`, scene, and selection remain intact.
+Startup does not replace saved `layout.ini`; `--layout world|records|classic` explicitly applies a layout.
+In Records, new forms/comparisons target the central dock. Set a floating window's initial position
+only when opening it, and never alongside a docking request: delayed `FirstUseEver` otherwise undocks
+it on the next frame. Panel `###` IDs remain language-independent.
+Records has two columns: catalog 38%, Inspector/Preview/forms/comparisons in the right dock.
+`DefaultLayout` updates the central ID every frame: an ini-loaded node may not exist on the first frame.
+Forms have readable minimum sizes bounded by the work area; `EnsureFloatingDocumentSize` separately
+restores undersized floating dock hosts, which ignore per-window constraints.
+`RenderWindow.Update` finishes loading/background operations even with the viewport hidden; GUI/input
+live in `DrawContent`. Typography/surfaces use `Ui/Theme.cs`, Segoe UI body text and installation-provided headings.
+`Ui/FormField` input/tooltip state uses full numeric ImGui IDs, not just field paths: Inspector and
+multiple forms can display `Race` simultaneously.
+`Ui/Studio.cs` styles native ImGui Button/Tab controls: ImGui retains IDs, disabled state, keyboard focus,
+and last-item state. `Theme.Surfaces` defines the shared surface hierarchy across palettes. `RecordForm`
+retains the selected section and draws the existing specialized editor in a content child, with sidebar
+navigation or a popup depending on width.
+When space is tight, `RenderWindow.DrawToolbar` provides the same controls in a menu; never let them
+reduce viewport height to zero, because GPU-model loading depends on viewport drawing.
+`--inspector-tab` prefers exact ID/name matches, then partial matches (Dialogue ≠ Dialogue conditions).
+All closable windows use `Studio.BeginWindow` / `Studio.BeginPopupModal` (`Ui/WindowChrome.cs`).
+These preserve native Begin/End and provide a close-button hit area of 1.5 font sizes (24 px at 100%)
+within the allocated space. Do not replace this with global TouchExtraPadding: it captures adjacent tabs.
+`--autotest-layout` clicks the outer edge of the enlarged area on an inactive tab and floating window,
+in addition to docking/size/undo checks. `WindowChrome` temporarily uses the outer clip only for X hit-testing:
+after native Begin, the content clip already excludes floating-window titles. Original clip/context/last-item are restored.
+At low heights `RecordForm` keeps ID/EditorID/actions in the header and moves secondary details to tooltips;
+unsaved/deleted/non-editable warnings remain visible.
 
-Каждая панель интерфейса — свой класс в `Editor.App/Panels` (наследник `Panel`), раскладки —
-`Panels/Panel.cs` (`DefaultLayout`, `LayoutPreset`), рабочая полоса — `Panels/EditorShell.cs`.
-`EditorApp.ApplyLayout` меняет только видимость/докирование: `EditDocument`, сцена и выбор остаются теми же.
-Сохранённый `layout.ini` при запуске не заменяется; `--layout world|records|classic` явно применяет раскладку.
-В «Записях» новые формы и сравнения получают центральный dock. Начальную позицию плавающего окна нужно
-передавать только при его открытии и не вместе с запросом docking: отложенный `FirstUseEver` иначе
-отстыкует окно на следующем кадре. `###` ID панелей остаются независимыми от языка.
-«Записи» теперь двухколоночные: каталог 38 %, Inspector/Preview/формы/сравнения в правом dock.
-`DefaultLayout` обновляет центральный ID каждый кадр: при чтении ini узел может отсутствовать в первом кадре.
-Формы ограничены читаемым минимумом и размером рабочей области; `EnsureFloatingDocumentSize` отдельно
-восстанавливает слишком маленький плавающий dock-host, который игнорирует per-window constraints.
-`RenderWindow.Update` завершает загрузку и фоновые операции даже при скрытом viewport; GUI и ввод —
-в `DrawContent`. Типографика/поверхности — `Ui/Theme.cs`, основной шрифт Segoe UI, заголовок — из сборки.
-Состояние ввода/подсказок `Ui/FormField` привязано к полному числовому ImGui ID, а не к одному пути поля:
-Инспектор и несколько открытых форм могут одновременно показывать `Race`.
-`Ui/Studio.cs` оформляет native ImGui Button/Tab: ID, disabled, клавиатурный фокус и last-item остаются
-у ImGui. `Theme.Surfaces` задаёт общую иерархию поверхностей для всех палитр. `RecordForm` хранит выбранный
-раздел и рисует прежний специализированный редактор в content-child; навигация сбоку либо popup по ширине.
-При нехватке места `RenderWindow.DrawToolbar` выводит меню с теми же контролами; нельзя вытеснять
-ими viewport до нулевой высоты — загрузка GPU-моделей зависит от его отрисовки.
-`--inspector-tab` предпочитает точное совпадение ID/названия, затем частичное (Dialogue ≠ Dialogue conditions).
-Все закрываемые окна используют `Studio.BeginWindow` / `Studio.BeginPopupModal` (`Ui/WindowChrome.cs`).
-Они сохраняют native Begin/End и дают X область 1.5 размера шрифта (24 px при 100 %) внутри отведённого места;
-не заменять общим TouchExtraPadding — он захватывает соседние tabs. `--autotest-layout` нажимает внешнюю
-кромку увеличенной зоны неактивной вкладки и плавающего окна, помимо проверок dock/размеров/undo.
-`WindowChrome` временно использует outer clip только для hit-test X: после native Begin content clip
-уже отсекает заголовок плавающего окна. Исходный clip/контекст/last-item восстанавливаются.
-При недостатке высоты `RecordForm` оставляет в шапке ID/EditorID/действия; вторичные сведения — в tooltip,
-а предупреждения о несохранённой/удалённой/недоступной для правки записи остаются видимыми.
+Alias scripts: `Core/AliasScripts` binds QuestAdapter.Aliases by FormKey + unsigned alias ID;
+`ScriptsEditor` edits quest and alias ScriptEntry values with the same controls. Missing PEX does not
+block saved properties. Removing an alias removes its binding, clears local scalar references, and
+clears array elements without shifting indices; external quests are unchanged.
+`--autotest-aliasscripts <scratch-dir> [quest EditorID]` checks value types, identity, other VMAD preservation,
+undo/redo, removal, roundtrip, and scratch save/reload; it does not change the active document/file.
 
-Скрипты алиасов: `Core/AliasScripts` связывает QuestAdapter.Aliases по FormKey + unsigned alias ID,
-а `ScriptsEditor` редактирует и квестовые, и алиасные ScriptEntry одним набором контролов.
-Отсутствие PEX не блокирует сохранённые свойства. При удалении алиаса удаляется его binding, локальные
-скалярные ссылки убираются, элементы массивов очищаются без сдвига индексов; внешние квесты не меняются.
-`--autotest-aliasscripts <scratch-dir> [quest EditorID]` проверяет типы значений, идентичность, сохранность
-других VMAD-данных, undo/redo, удаление, roundtrip и scratch save/reload; активный документ/файл не меняет.
+Collision pins published Bepu **2.5.0-beta.33** (prerelease): stable 2.4 has an unbounded face walk that
+writes beyond an unmanaged buffer. Do not restore 2.4 or disable collision: upstream fixes traversal
+with a visited set and bounded steps. Game-independent `stbedit-cli collisiontest` checks cube edges and
+the problematic cloud from [upstream #325](https://github.com/bepu/bepuphysics2/issues/325), bounds preservation,
+unique/valid edges, and positive dynamic-body inertia.
 
-Коллизии: Bepu закреплён на опубликованной **2.5.0-beta.33** (prerelease), поскольку стабильная 2.4
-содержит unbounded face walk с записью за unmanaged-буфер. Не возвращать 2.4 и не отключать коллизию:
-обход с visited-set и ограниченным числом шагов исправлен upstream. `stbedit-cli collisiontest`
-не требует игры; проверяет рёбра куба и проблемное облако из [upstream #325](https://github.com/bepu/bepuphysics2/issues/325),
-сохранение габаритов, уникальность/валидность рёбер и положительную инерцию динамического тела.
+## Unattended checks
 
-## Проверка без человека у экрана
+The application can run a scenario and exit, supporting unattended rendering/UI checks.
 
-Приложение умеет отработать сценарий и выйти — так проверяется каждое изменение рендера и UI.
+Capture readiness waits for models the renderer can load: deleted and hidden references are excluded.
+This also applies to MCP screenshot readiness. Check captures with **Display → Disabled** off and with
+hidden object groups; neither should wait indefinitely for deliberately unloaded models.
 
-| Ключ | Что делает |
+| Flag | Behavior |
 |---|---|
-| `--screenshot out.bmp` | после загрузки снять кадр всего окна и выйти (без диалогов и MessageBox) |
-| `--cell <EditorID\|FormID>` | открыть ячейку и ждать, пока догрузятся все меши и текстуры |
-| `--camera dx,dy,dz,yaw,pitch` | камера относительно фокуса сцены (градусы; yaw 0 = +Y); `=x,y,z,yaw,pitch` — в мировых координатах |
-| `--pick fx,fy` | выбрать объект под долей окна (в лог `pick:`) |
-| `--select <FormID>` / `--search <текст>` | выделить запись / отфильтровать Object Window |
-| `--layout world\|records\|classic` | явно применить раскладку панелей, не меняя сцены, выбранных записей и правок |
-| `--autotest-layout` (с `--cell`) | изменить реф, открыть форму и сравнение → «Записи» (проверить фактическое докирование) → «Классическая» → «Мир» → undo/redo; сцена, выбор и документы сохраняются, в конце 0 несохранённых, ничего не записывает |
-| `--no-markers` | без маркеров |
-| `--render opaque=0,blended=0,markers=0,shading=N,particles=0,animate=0,psys=<имя>,logblended=1,collision=1` | изоляция проходов рендера |
-| `--psys <имя>` | рисовать только системы частиц с таким именем (и в Preview) |
-| `--object-shot <FormID> out.bmp [размер] [yaw] [pitch] [zoom]` | крупный кадр одного базового объекта рендером Preview (ждёт ассеты, проигрывает ~1 с анимации) |
-| `--autotest-save <папка>` (с `--cell` и `--pick fx,fy`) | сценарий «правка → сохранение → перезагрузка» на копии (потом вернуть `settings.json`) |
-| `--autotest-new <папка>` | новый интерьер + объект, новый мир + объекты (в т.ч. в ещё не созданной ячейке) → сохранение в новый плагин в папке → перезагрузка, итог в логе `autotest-new:` |
-| `--autotest-land <папка>` (с `--cell`) | холм на краю центральной ячейки, Ctrl+Z / Ctrl+Y, покраска, сохранение в новый плагин, перезагрузка, сверка высоты (`autotest-land:` в логе) |
-| `--autotest-landview <папка>` | новый мир с плоской землёй, холм, снег, трава, сглаживание — для скриншота, ничего не сохраняет |
-| `--autotest-dup <папка>` (с `--cell` интерьера) | дубль STAT → в каталоге → поставить → сохранить → после перезагрузки реф на новую запись |
-| `--autotest-nav <папка>` (с `--cell` интерьера) | удалить треугольник навмеша, собрать заново по трём вершинам, сдвинуть вершину, Ctrl+Z/Y, сохранить, перезагрузить, сверить |
-| `--dialog newcell\|newworld <плагин.esp>` | открыть диалог создания с временным активным файлом (для скриншотов) |
-| `--autotest-fly <n>` (с `--cell` экстерьера) | полёт на восток по ячейке раз в 3 с; в логе `autotest-fly:` память процесса, GC, видеопамять, размеры кэшей — память не должна расти |
-| `--video-budget <МБ>` | считать, что у видеокарты столько памяти (проверка выгрузки кэшей на большой карте) |
-| `--reference-window` (с `--select` или `--pick`) | открыть окно ссылки для выделенного (снимки) |
-| `--autotest-primitives <папка>` (с `--cell`) | новый активный файл в папке (не сохраняется), каждый пункт меню «Создать» один раз, XPRM из правленой записи, портал между двумя комнатами и соединение комнат, потом всё отменяется |
-| `--autotest-brushes` (с внешней `--cell`) | каждый новый режим кисти ландшафта одним мазком (задать высоту, поднять до, опустить до, шум, покраска с max opacity, стереть, убрать траву), проверка и Ctrl+Z; в конце несохранённого 0 |
-| `--autotest-marquee [nav]` (с `--cell`) | реальный Shift+drag синтетической мышью; точные объекты/индексы треугольников, очистка press/release, сохранение selection после отпускания Shift, неизменность камеры, записей и undo; неверный результат завершает процесс ошибкой |
-| `--autotest-navtools` (с `--cell`) | заливка + обратная заливка = все треугольники, флаг воды и Ctrl+Z, поворот внутреннего ребра (Check NavMeshes до / после) и Ctrl+Z, путь от треугольника 0 до самого дальнего связанного; ничего не сохраняет |
-| `--autotest-gizmo [move]` (с `--cell`) | выделить объект, гизмо поворота (или переноса), найти кольцо/стрелку «мышью» (`ImGuiLayer.TestMouse`), протащить; в логе поворот / позиция до и после |
-| `--autotest-door [ask]` (с `--cell` интерьера) | выйти через телепорт и вернуться; `ask` ждёт действительно нарисованное окно подтверждения и отвечает Enter, а не опрашивает popup ID из чужого ImGui-контекста |
-| `--autotest-zoom` (с `--cell`) | один щелчок фейкового колеса над окном: в логе, на сколько и за сколько кадров сдвинулась камера |
-| `--lang en\|ru` | язык интерфейса на этот запуск (настройка не меняется) |
-| `--autotest-form <папка> [FormID NPC]` | правка формы через тот же `EditTarget`, что вкладки: рост 1.000123, навык, перечисление, новая строка инвентаря → сохранение → перезагрузка, в логе `autotest-form:` |
-| `--autotest-picker <FormID NPC> <текст> [click\|show\|browse]` | в окне формы кликнуть поле «Раса» фейковой мышью, напечатать текст фейковой клавиатурой (`ImGuiLayer.TestText`/`TestKeys`), выбрать подсказку стрелкой+Enter или кликом; `show`/`browse` — оставить список / ▼ открытыми для скриншота |
-| `--open-form <FormID>` / `--inspector-tab <вкладка>` / `--expand-forms` | открыть окно формы, вкладку (английское имя), раскрыть строки списков — для скриншотов |
-| `--show-help` / `--show-settings` | открыть окно «Клавиши и функции» / «Настройки» (для скриншота) |
-| `--autotest-ops <папка>` (с `--cell` интерьера) | «+ Новая» (MISC с названием, GLOB), удаление новой записи, копировать/вставить реф, сохранение, перезагрузка; затем удаление своей записи, сохранение, проверка |
-| `--autotest-filter <плагин> [conflicts]` (с `--type SIG`) | фильтр плагина и конфликтов «Окна объектов»: сколько строк, за сколько проверено, поля первых конфликтов |
-| `--autotest-useinfo <FormID\|EditorID> [goto]` | окно «Где используется»: сколько записей подтверждено, отброшено, сколько в мире; `goto` — открыть ячейку первого объекта и проверить, что он выделен |
-| `--autotest-batch <папка>` (с `--cell` интерьера) | Persistent трём рефам сразу (с Ctrl+Z / Ctrl+Y), замена базы у одного, копия MISC как override → сохранение, перезагрузка, проверка |
-| `--autotest-findtext [текст]` | поиск по Skyrim.esm и каталогу, замена во всех найденных одним шагом: реплика под своей темой, служебная строка (переменная условия) не тронута; отмена |
-| `--autotest-comparecopy` | ключевые слова и вес старейшей версии брони — в версию активного файла (столбцы идут от первого плагина к победителю); вес одной брони — в две другие; всё отменяется |
-| `--autotest-compact <папка> <плагин>` | копия плагина — активный файл; «Сжать FormID» с флагом ESL: бэкап, замена, перезагрузка; в файле все свои записи в 0x800–0xFFF и флаг Small |
-| `--autotest-bsa <папка>` | новый плагин в папке — активный файл; рядом меши, текстуры, .pex и .psc; «Упаковать в BSA»: основной архив и архив текстур читаются Mutagen с нужными файлами байт в байт, .psc не попал |
-| `--autotest-clean <папка> <плагин>` | копия плагина в папке — активный файл; «Проверка и очистка»: ошибки, ITM, UDR; ITM убираются одним шагом (Ctrl+Z / Ctrl+Y проверяются) и сохраняются в копию — в ней ровно этих переопределений нет |
-| `--autotest-finalize <папка>` (с `--cell` интерьера с дверью) | новый плагин в папке — активный файл; Finalize ячейки (треугольник двери как у CK), удаление треугольника + Finalize изменённых (XNDP двери следует за номером); сохранение, перезагрузка: навмеш, дверь и запись NAVI в плагине согласованы |
-| `--autotest-cellprops <папка>` (с `--cell` интерьера) | новый плагин в папке — активный файл; окно свойств ячейки: окружающий свет (окно рендера меняется сразу), музыка, владелец, флаг, имя; климат Tamriel; сохранение, перезагрузка: в плагине ячейка и мир только заголовками (0 рефов) с новыми значениями |
-| `--autotest-dialogue <папка>` (с `--inspector-tab Dialogue`) | новый плагин в папке — активный файл; вкладка «Диалоги» DA01: реплика ванильной темы (текст, второй ответ, «прощание», условие), новая реплика, приоритет темы, новая ветка с темой и репликой, фрагмент «Конец» компилируется; сохранение, перезагрузка: в теме только наши реплики, новые ветка / тема / реплика на месте и видны у квеста |
-| `--autotest-fragments <папка>` | новый плагин в папке — активный файл; новый квест (Start Game Enabled) с алиасом и стадией; сломанный фрагмент не компилируется, рабочий — компилируется (QF_ рядом с плагином), у квеста фрагмент и `Alias_` свойство; новый скрипт через окно исходника прикрепляется после компиляции; сохранение с SEQ, перезагрузка, проверка. Пишет только в `<папка>` |
-| `--autotest-package <папка> [EditorID]` (с `--inspector-tab "Package Data"` / `"Schedule"` / `"Procedure Tree"`) | новый пакет в черновом активном файле в `<папке>`: шаблон Sandbox через логику выбора шаблона, расписание, вход, вид места, флаг Wear Sleep Outfit; чтение обратно; отмена и возврат; дерево процедур: корень, ветка внутрь, следом, перестановка, удаление, чтение обратно; с EditorID открывается и этот пакет; ничего не сохраняет (восстанови settings.json) |
-| `--autotest-scene <папка> [EditorID]` (с `--inspector-tab "Phases and Actions"` / `"Actors"` / `"Scene"`) | новая сцена в черновом активном файле в `<папке>` для квеста `dunFellglow_ReleaseDogs`: два актёра, две фазы, реплика с новой темой сцены и репликой, пакет, таймер, фаза вставлена в начало; чтение обратно; отмена и возврат; с EditorID открывается и эта сцена; ничего не сохраняет (восстанови settings.json) |
-| `--autotest-aliasuse [квест] [ID алиаса]` (с `--inspector-tab "Quest Aliases"` — в PowerShell `Start-Process` название с пробелом передавай в кавычках: `"\"Quest Aliases\""`) | форма квеста с выбранным алиасом и его «Где используется» (по умолчанию MS13, алиас 1 Arvel); места пишутся в лог; ничего не меняет |
-| `--autotest-texts <папка> [плагин]` | тексты плагина (по умолчанию The Heart Of Dibella) выгружаются в `<папку>`, каждый 5-й «переводится», импорт в черновой активный файл в `<папке>`; отмена и возврат; ничего не сохраняет (восстанови settings.json) |
-| `--autotest-navsplit <папка>` (с `--cell <интерьер>`) | черновой активный файл в `<папке>`; треугольник 5 первого навмеша по номеру, затем треть его треугольников выносится в новый навмеш (один шаг отмены); отмена и возврат; ничего не сохраняет (восстанови settings.json) |
-| `--autotest-comparefile <плагин> <другой файл> [папка]` | окно «Сравнить с другим файлом» сравнивает их; различия в лог; с папкой — delta-патч в черновой активный файл там и Ctrl+Z (восстановить settings.json) |
-| `--autotest-levelmerge <папка>` | черновой активный файл в `<папке>`; левел-листы для слияния находятся и пишутся в него (один шаг отмены); отмена и возврат; ничего не сохраняет (восстанови settings.json) |
-| `--autotest-bodytint <папка> [NPC]` | черновой активный файл в `<папке>`; тинт тела NPC (по умолчанию aaMZa_Imp_Fire из STB.esp) исправляется как кнопкой окна проверки; отмена; ничего не сохраняет (восстанови settings.json) |
-| `--autotest-heightmap <папка>` (с `--cell <внешняя ячейка>`) | карта высот загруженных ячеек выгружается в `<папку>`, её копия с диапазоном +1000 импортируется (один шаг отмены), высота проверяется; отмена; ничего не сохраняет |
-| `--autotest-vcolor` (с `--cell <внешняя ячейка>`) | один мазок кисти цвета вершин (красный, радиус 1500) в фокусе вида; цвет под ним в лог; ничего не сохраняет |
-| `--autotest-face [FormID NPC]` (с `--inspector-tab Appearance`; по умолчанию Оргнар) | форма NPC на редакторе лица; два ползунка «отпущены» на 1, второй пресет первого тинта с пресетами; превью пересобрано (`%TEMP%\stbeditor_face_before.bmp` / `_after.bmp`), запись изменена, два Ctrl+Z; ничего не сохраняет |
-| `--autotest-dialoguegraph [квест]` (с `--inspector-tab Dialogue`; по умолчанию MQ101) | форма квеста на графе диалогов — для кадра |
-| AI / MCP | см. [AI-BRIDGE.md](AI-BRIDGE.md): `AiBridge: true`, HTTP JSON-RPC на `127.0.0.1:47110/mcp`; отдельно проверять `AiBridgeEdits` и `AiBridgeScripts` (по умолчанию false), применять/отклонять предложения; вернуть settings.json после |
-| `--bos` | включить превью Base Object Swapper (для снимков; в логе снимка `BOS N swapped`) |
-| `--fade-picked [2]` (с `--pick fx,fy`) | клавиша `1` на выбранном один раз (полупрозрачно) или два (скрыто), в логе `fade-picked` |
-| `--autotest-findplaced <текст> [мир]` (по умолчанию Tamriel) | «Ячейки» → «Найти объекты в мире»: сколько расставлено и первые строки в логе |
-| `--autotest-frameworks [EditorID]` (по умолчанию aaMZp_DamageWeaponsNPC; EditorID NPC — его форма, с `--inspector-tab "Spells and perks"`, и что SPID ему выдаёт) | конфиги прочитаны, Use Info записи на вкладке «Фреймворки», строки SPID / KID и сколько им достаётся |
-| `--autotest-filtereddialogue [NPC]` (по умолчанию Belethor) | «Реплики персонажа»: сколько реплик и привязанных, первые три |
-| `--autotest-lineorder <dir> [квест]` (по умолчанию MQ101) | черновой активный файл в `<dir>`; в первой теме с тремя репликами первая сдвинута ниже, порядок до и после; две новые реплики, последняя удалена, удаление ванильной отклонено; Ctrl+Z до нуля; восстановить settings.json |
-| `--autotest-assets [плагин]` (по умолчанию Dawnguard.esm) | «Ассеты плагина»: сколько файлов по видам и источникам, первые отсутствующие |
-| `--autotest-export <dir> [плагин]` (по умолчанию Dawnguard.esm) | экспорт данных всех видов в `<dir>`, файлы и строки в логе; проверка схлопывания ModGroups на выдуманных версиях |
-| `--autotest-script` | скрипт, считающий NPC без голоса и прибавляющий 1 к урону IronSword, запущен как кнопкой «Запустить»; вывод, урон в правке, Ctrl+Z; примеры в «Документы» не пишет; ничего не сохраняет |
-| `--autotest-region [dir]` (с `--cell` внешней ячейки) | окно «Регионы», границы, инструмент; регион под центром вида выбран, кадр сверху `%TEMP%\stbeditor_region.bmp`; первый угол сдвинут на 500 к востоку, новый регион (в черновом активном файле в `dir`), два Ctrl+Z; восстановить settings.json |
-| `--autotest-sky [EditorID WTHR]` (с `--cell` внешней ячейки; по умолчанию SkyrimClear) | вид освещён погодой в 6:30, 12, 19 и 23 часа — кадр на каждый час (`%TEMP%\stbeditor_sky_<час>.bmp`) и свет в логе; потом свет по умолчанию |
-| `--autotest-voice <dir>` | «Голосовые файлы» для реплик MQ101 (сколько в каком состоянии); одна реплика превращена в стерео WAV в `<dir>` (из .fuz сборки), «Создать .lip и упаковать .fuz» — в `<dir>` появляются .lip и .fuz; пишет только в `<dir>` |
-| `--autotest-idletree` | окно «Idle-анимации»; под первым idle с тремя детьми первый сдвинут ниже (как «Ниже» в меню), порядок из пересобранного дерева, кадр `%TEMP%\stbeditor_idletree.bmp`, Ctrl+Z и порядок снова; ничего не сохраняет |
-| `--autotest-perktree [EditorID AVIF]` (с `--inspector-tab "Perk tree"`; по умолчанию AVOneHanded) | форма навыка на дереве перков, кадр `%TEMP%\stbeditor_perktree_before.bmp`; узел 1 сдвинут на полстолбца вправо и вверх, связь 1 → 2 переключена, узел добавлен от узла 1 — как мышью на холсте; дерево записи в логе, кадр `_after.bmp`, три Ctrl+Z; потом вид «Как в игре» с шестью взятыми рангами на навыке 40 (`_game.bmp`, небосвод игры) и строка `sky`: место навыка, ширина, настройки меню, звезда узла 1 в мире и её обратный пересчёт в сетку (должен совпасть); ничего не сохраняет |
-| `--autotest-navgen` (с `--cell`, интерьер или внешняя ячейка) | «Сгенерировать навмеш» с настройками по умолчанию, как кнопка панели; треугольники до / после и итог (с Finalize) в логе, кадр сверху `%TEMP%\stbeditor_navgen_after.bmp`, Ctrl+Z до нуля несохранённого; ничего не сохраняет |
-| `--autotest-havok` (с `--cell RiverwoodSleepingGiantInn`) | шесть котелков и тарелок у очага приподняты на 10 и наклонены на 20°, Run Havok Sim; где легли против того, где лежали (по высоте ±0,5, без наклона), кадр `%TEMP%\stbeditor_havok_after.bmp`, Ctrl+Z; ничего не сохраняет |
-| `--autotest-facegen <папка> [FormID NPC]` (с `--cell`, по умолчанию Оргнар в `RiverwoodSleepingGiantInn`) | черновой активный файл в `<папке>`; кадр лица с головой CK (`facegen_before.bmp`), экспорт FaceGen как Ctrl+F4, файлы и их чтение, голова перезагружена, итоговый кадр (восстанови settings.json) |
-| `--autotest-place <папка> [FormID базы]` (с `--cell`) | размещение базы (по умолчанию XMarkerHeading), её MCP ID из `get_status` снова выбирает этот новый реф через `select`; модель/picking/Inspector, гизмо и CK-повороты, LMB Rotate без сдвига и Move с реальным ограниченным перемещением без поворота; EditorID через Inspector, scratch-сохранение и чтение, Inspector после reload. Перед press указатель наводится на handle; нулевой Move — ошибка. Восстановить settings.json |
-| `--autotest-palette <папка>` (с `--cell`) | черновой активный файл в `<папке>`; три кучи камней в палитре, пять объектов вокруг фокуса вида (случайный выбор, поворот, размер); ничего не сохраняет (восстанови settings.json) |
-| `--autotest-layers` (с `--cell`) | слой из 40 статик ячейки: скрыт (выпадают из рисования и выбора), показан и заморожен; тестовый слой в конце удаляется (если `layers.json` не было, удали пустой файл) |
-| `--autotest-storymanager` | окно Story Manager строит дерево; число узлов и событий в лог; первый узел под веткой с двумя детьми сдвинут «Ниже», порядок до и после, Ctrl+Z |
-| `--autotest-quest [EditorID]` (с `--inspector-tab "Quest Stages"` / `"Quest Objectives"` / `"Quest Aliases"`) | форма квеста: новая стадия с записью журнала и условием, смена индекса стадии (список пересортирован), цель с целью на карте, алиас с конкретным рефом — через EditTarget формы; квест пишется и читается обратно; всё отменяется и возвращается; ничего не сохраняет |
-| `--autotest-conditions` (лучше с `--inspector-tab Conditions`) | форма перка на вкладке условий: функция, параметр, оператор, значение, ИЛИ, глобальная, новая строка и перенос — через EditTarget самой формы; копировать и вставить в другой перк; все шаги отменяются и возвращаются; ничего не сохраняет |
-| `--autotest-refmore` (с `--cell` интерьера) | «Ещё свойства» у двух рефов: список полей, ignored by sandbox и encounter zone у обоих, два Ctrl+Z возвращают; ничего не сохраняет |
-| `--autotest-together` | три брони в одной форме «Править вместе»: вес 9.5 во всех, Ctrl+Z возвращает |
-| `--autotest-sheet <SIG>` | таблица типа (WEAP / ARMO / AMMO …): сколько строк, пустые ячейки по колонкам (неверный путь — вся колонка пустая), правка веса (отменяется) |
-| `--autotest-masters <папка>` | новый плагин с лишним мастером Update.esm посередине → сохранение → Clean Masters → сохранение: Update.esm уходит, ссылки на Dawnguard не ломаются |
-| `--autotest-savecheck <папка> <плагин>` | копия существующего плагина, override из прежнего немастера, подготовка сохранения; диалог с нужным новым мастером остаётся для снимка. SHA-256 оригинала и копии не меняются до согласия; проверочный временный файл создаётся. Отсутствие подтверждения/подходящих данных — ошибка, не вечное ожидание |
-| `--ui-scale <множитель>` | размер интерфейса на этот запуск (`1.3` = 130 %) |
-| `--theme <имя>` | тема оформления на этот запуск (`Theme.Palettes`, например `Cobalt`, `"Windows Light"`) |
-| `--autotest-compare <FormID> [FormID...] [versions\|records]` | окно сравнения версий первой записи, затем выделить все в «Окне объектов» и сравнить; в логе `autotest-compare:` строки по цветам и отличающиеся строки; `versions`/`records` — оставить только одно окно для скриншота |
+| `--screenshot out.bmp` | Capture the whole window after loading and exit, without dialogs/MessageBox |
+| `--cell <EditorID\|FormID>` | Open a cell and wait for all meshes/textures to load |
+| `--camera dx,dy,dz,yaw,pitch` | Camera relative to scene focus (degrees; yaw 0 = +Y); `=x,y,z,yaw,pitch` uses world coordinates |
+| `--pick fx,fy` | Select at viewport fractions; log `pick:` |
+| `--select <FormID>` / `--search <text>` | Select a record / filter Object Window |
+| `--layout world\|records\|classic` | Explicitly apply a panel layout without changing scene, selected records, or edits |
+| `--autotest-layout` (with `--cell`) | Edit a reference, open form/comparison → Records (check actual docking) → Classic → World → undo/redo; preserve scene/selection/documents, end with 0 unsaved, write nothing |
+| `--no-markers` | Hide markers |
+| `--render opaque=0,blended=0,markers=0,shading=N,particles=0,animate=0,psys=<name>,logblended=1,collision=1` | Isolate rendering passes |
+| `--psys <name>` | Draw only particle systems with this name, including Preview |
+| `--object-shot <FormID> out.bmp [size] [yaw] [pitch] [zoom]` | Close-up base-object Preview render; wait for assets and play ~1 s of animation |
+| `--autotest-save <dir>` (with `--cell` and `--pick fx,fy`) | Edit → save → reload on a copy; restore `settings.json` afterward |
+| `--autotest-new <dir>` | New interior + object, new world + objects (including a nonexistent cell) → save a new plugin in dir → reload; log `autotest-new:` |
+| `--autotest-land <dir>` (with `--cell`) | Hill at the central cell edge, Ctrl+Z / Ctrl+Y, paint, save new plugin, reload, compare height; log `autotest-land:` |
+| `--autotest-landview <dir>` | New world with flat terrain, hill, snow, grass, smoothing for screenshots; save nothing |
+| `--autotest-dup <dir>` (with interior `--cell`) | Duplicate STAT → catalog → place → save → reload reference to new record |
+| `--autotest-nav <dir>` (with interior `--cell`) | Delete navmesh triangle, rebuild from three vertices, move vertex, Ctrl+Z/Y, save, reload, compare |
+| `--dialog newcell\|newworld <plugin.esp>` | Open creation dialog with temporary active file for screenshots |
+| `--autotest-fly <n>` (with exterior `--cell`) | Fly east one cell every 3 s; log process/GC/video memory and cache sizes under `autotest-fly:`; memory must stay flat |
+| `--video-budget <MB>` | Override GPU memory budget to check cache eviction on large maps |
+| `--reference-window` (with `--select` or `--pick`) | Open selected reference window for screenshots |
+| `--autotest-primitives <dir>` (with `--cell`) | New unsaved active file in dir; each Create menu item once, XPRM from edited record, portal between two rooms and room join; undo everything |
+| `--autotest-brushes` (with exterior `--cell`) | One stroke per new landscape mode: set height, raise/lower to, noise, max-opacity paint, erase, remove grass; check and Ctrl+Z; end with 0 unsaved |
+| `--autotest-marquee [nav]` (with `--cell`) | Real Shift+drag using synthetic mouse; exact objects/triangle indices, press/release cleanup, selection retained after Shift release, unchanged camera/records/undo; wrong result exits with error |
+| `--autotest-navtools` (with `--cell`) | Fill + inverse fill = all triangles, water flag and Ctrl+Z, rotate internal edge (Check NavMeshes before/after) and Ctrl+Z, path from triangle 0 to farthest connected; save nothing |
+| `--autotest-gizmo [move]` (with `--cell`) | Select object, rotation/move gizmo, find ring/arrow with synthetic mouse (`ImGuiLayer.TestMouse`), drag; log before/after rotation/position |
+| `--autotest-door [ask]` (with interior `--cell`) | Leave through teleport and return; `ask` waits for the actually drawn confirmation and presses Enter, rather than polling popup IDs from another ImGui context |
+| `--autotest-zoom` (with `--cell`) | One synthetic wheel notch over viewport; log camera displacement and frame count |
+| `--lang en\|ru` | UI language for this run, without changing settings |
+| `--autotest-form <dir> [NPC FormID]` | Form edit through tabs' `EditTarget`: height 1.000123, skill, enum, new inventory row → save → reload; log `autotest-form:` |
+| `--autotest-picker <NPC FormID> <text> [click\|show\|browse]` | Synthetic click Race field in form, type with `ImGuiLayer.TestText`/`TestKeys`, choose suggestion by arrow+Enter or click; `show`/`browse` leaves list / ▼ open for screenshot |
+| `--open-form <FormID>` / `--inspector-tab <tab>` / `--expand-forms` | Open form, tab (English name), expand list rows for screenshots |
+| `--show-help` / `--show-settings` | Open Keys and features / Settings for screenshots |
+| `--autotest-ops <dir>` (with interior `--cell`) | New MISC with name and GLOB, remove new record, copy/paste reference, save/reload; then remove own record, save/check |
+| `--autotest-filter <plugin> [conflicts]` (with `--type SIG`) | Object Window plugin/conflict filters: row counts, checking time, first conflicts' fields |
+| `--autotest-useinfo <FormID\|EditorID> [goto]` | Use Info: confirmed/rejected/placed counts; `goto` opens first object's cell and checks selection |
+| `--autotest-batch <dir>` (with interior `--cell`) | Set Persistent on three references (Ctrl+Z/Y), replace one base, copy MISC as override → save/reload/check |
+| `--autotest-findtext [text]` | Search Skyrim.esm/catalog, replace all matches in one step: line under its topic, service string (condition variable) unchanged; undo |
+| `--autotest-comparecopy` | Copy keywords/weight from oldest armor version to active-file version (columns run first plugin to winner); copy one armor's weight to two others; undo all |
+| `--autotest-compact <dir> <plugin>` | Copy plugin as active file; Compact FormIDs with ESL: backup, replace, reload; all own records in 0x800–0xFFF with Small flag |
+| `--autotest-bsa <dir>` | New active plugin in dir, adjacent meshes/textures/.pex/.psc; Pack BSA: Mutagen reads main/texture archives with expected byte-identical files; excludes .psc |
+| `--autotest-clean <dir> <plugin>` | Copy active plugin; Check and clean errors/ITM/UDR; remove ITMs in one step (check Ctrl+Z/Y), save copy lacking exactly those overrides |
+| `--autotest-finalize <dir>` (with interior `--cell` containing door) | New active plugin; Finalize cell (CK door triangle), delete triangle + Finalize changed (door XNDP follows index); save/reload: navmesh, door, NAVI agree |
+| `--autotest-cellprops <dir>` (with interior `--cell`) | New active plugin; cell properties: ambient (viewport changes immediately), music, owner, flag, name; Tamriel climate; save/reload header-only cell/world (0 references) with new values |
+| `--autotest-dialogue <dir>` (with `--inspector-tab Dialogue`) | New active plugin; DA01 Dialogue: vanilla-topic line (text, second response, goodbye, condition), new line, topic priority, new branch/topic/line, compiled End fragment; save/reload: only our lines in topic; new branch/topic/line present and visible on quest |
+| `--autotest-fragments <dir>` | New active plugin; new Start Game Enabled quest with alias/stage; broken fragment fails, valid fragment compiles (QF_ beside plugin), quest has fragment and `Alias_` property; new source-window script attaches after compiling; save with SEQ, reload/check; writes only to dir |
+| `--autotest-package <dir> [EditorID]` (with `--inspector-tab "Package Data"` / `"Schedule"` / `"Procedure Tree"`) | New package in scratch active file: Sandbox through template-picker logic, schedule, input, location kind, Wear Sleep Outfit; read back, undo/redo; procedure tree root, nested branch, following branch, move, delete, read back; also opens supplied EditorID; save nothing, restore settings.json |
+| `--autotest-scene <dir> [EditorID]` (with `--inspector-tab "Phases and Actions"` / `"Actors"` / `"Scene"`) | New scene in scratch active file for `dunFellglow_ReleaseDogs`: two actors/phases, dialogue with new scene topic/line, package, timer, phase inserted first; read back, undo/redo; also opens supplied EditorID; save nothing, restore settings.json |
+| `--autotest-aliasuse [quest] [alias ID]` (with `--inspector-tab "Quest Aliases"`; quote spaced names in PowerShell `Start-Process`: `"\"Quest Aliases\""`) | Quest form with selected alias and Use Info (default MS13, alias 1 Arvel); log uses; change nothing |
+| `--autotest-texts <dir> [plugin]` | Export plugin texts (default The Heart Of Dibella), “translate” every fifth, import into scratch active file in dir; undo/redo; save nothing, restore settings.json |
+| `--autotest-navsplit <dir>` (with interior `--cell`) | Scratch active file; triangle 5 of first navmesh by ID, then move one third of its triangles into new navmesh (one undo step); undo/redo; save nothing, restore settings.json |
+| `--autotest-comparefile <plugin> <other-file> [dir]` | Compare with another file and log differences; with dir, create delta patch in scratch active file and Ctrl+Z; restore settings.json |
+| `--autotest-levelmerge <dir>` | Scratch active file; find leveled lists to merge and write in one undo step; undo/redo; save nothing, restore settings.json |
+| `--autotest-bodytint <dir> [NPC]` | Scratch active file; fix NPC body tint (default aaMZa_Imp_Fire from STB.esp) through check-window logic; undo; save nothing, restore settings.json |
+| `--autotest-heightmap <dir>` (with exterior `--cell`) | Export loaded cells' heightmap, import copy with range +1000 in one undo step, check height; undo; save nothing |
+| `--autotest-vcolor` (with exterior `--cell`) | One red vertex-color stroke, radius 1500, at view focus; log color; save nothing |
+| `--autotest-face [NPC FormID]` (with `--inspector-tab Appearance`; default Orgnar) | NPC face editor: “release” two sliders at 1, choose second preset of first tint with presets; rebuild preview (`%TEMP%\stbeditor_face_before.bmp` / `_after.bmp`), record changed, two Ctrl+Z; save nothing |
+| `--autotest-dialoguegraph [quest]` (with `--inspector-tab Dialogue`; default MQ101) | Quest dialogue graph for screenshot |
+| AI / MCP | See [AI-BRIDGE.md](AI-BRIDGE.md): `AiBridge: true`, HTTP JSON-RPC at `127.0.0.1:47110/mcp`; separately check `AiBridgeEdits`/`AiBridgeScripts` (default false), apply/reject proposals; restore settings.json |
+| `--bos` | Enable Base Object Swapper preview for screenshots; screenshot log `BOS N swapped` |
+| `--fade-picked [2]` (with `--pick fx,fy`) | Apply key `1` once (translucent) or twice (hidden); log `fade-picked` |
+| `--autotest-findplaced <text> [world]` (default Tamriel) | Cell View → Find placed objects: log count and first rows |
+| `--autotest-frameworks [EditorID]` (default aaMZp_DamageWeaponsNPC; NPC EditorID opens its form with `--inspector-tab "Spells and perks"` and SPID gifts) | Read configs, record Use Info Frameworks tab, SPID/KID lines and recipient counts |
+| `--autotest-filtereddialogue [NPC]` (default Belethor) | NPC dialogue: line/bound counts and first three |
+| `--autotest-lineorder <dir> [quest]` (default MQ101) | Scratch active file; move first line down in first topic with three lines, log order before/after; two new lines, remove last, reject vanilla removal; Ctrl+Z to zero; restore settings.json |
+| `--autotest-assets [plugin]` (default Dawnguard.esm) | Plugin assets: counts by kind/source, first missing files |
+| `--autotest-export <dir> [plugin]` (default Dawnguard.esm) | Export every data kind; log files/rows; check ModGroups collapse with synthetic versions |
+| `--autotest-script` | Run script counting voiceless NPCs and adding 1 to IronSword damage through Run-button logic; output, edited damage, Ctrl+Z; no Documents examples, save nothing |
+| `--autotest-region [dir]` (with exterior `--cell`) | Regions window/borders/tool; select region at view center, top-down `%TEMP%\stbeditor_region.bmp`; move first corner 500 east, create region in scratch active file in dir, two Ctrl+Z; restore settings.json |
+| `--autotest-sky [WTHR EditorID]` (with exterior `--cell`; default SkyrimClear) | Weather lighting at 6:30, 12, 19, 23; screenshot each (`%TEMP%\stbeditor_sky_<hour>.bmp`), log lighting, then restore default light |
+| `--autotest-voice <dir>` | MQ101 Voice files counts by state; turn one response into stereo WAV in dir from installation .fuz; Create .lip and pack .fuz produces both in dir; writes only there |
+| `--autotest-idletree` | Idle animations window; under first idle with three children move first down via menu logic, log rebuilt order, `%TEMP%\stbeditor_idletree.bmp`, Ctrl+Z and order again; save nothing |
+| `--autotest-perktree [AVIF EditorID]` (with `--inspector-tab "Perk tree"`; default AVOneHanded) | Skill form/perk tree, `%TEMP%\stbeditor_perktree_before.bmp`; move node 1 half-column right/up, toggle 1 → 2, add node from 1 through canvas logic; log record tree, `_after.bmp`, three Ctrl+Z; then As in game with six ranks at skill 40 (`_game.bmp`, game skydome), `sky` log: skill slot, width, menu settings, node 1 world star and inverse grid conversion (must match); save nothing |
+| `--autotest-navgen` (with interior/exterior `--cell`) | Generate navmesh with default panel-button logic; log triangles before/after and Finalize result, top-down `%TEMP%\stbeditor_navgen_after.bmp`, Ctrl+Z to zero unsaved; save nothing |
+| `--autotest-havok` (with `--cell RiverwoodSleepingGiantInn`) | Raise six hearth pots/plates by 10, tilt 20°, Run Havok Sim; compare resting position with original (height ±0.5, no tilt), `%TEMP%\stbeditor_havok_after.bmp`, Ctrl+Z; save nothing |
+| `--autotest-facegen <dir> [NPC FormID]` (with `--cell`; default Orgnar in `RiverwoodSleepingGiantInn`) | Scratch active file; face with CK head (`facegen_before.bmp`), Ctrl+F4 FaceGen export, files/readback, reload head, final screenshot; restore settings.json |
+| `--autotest-place <dir> [base FormID]` (with `--cell`) | Place base (default XMarkerHeading), reselect new reference through `select` using its `get_status` MCP ID; model/picking/Inspector, gizmo/CK rotation, LMB Rotate without translation and bounded nonzero Move without rotation; Inspector EditorID, scratch save/readback, Inspector after reload. Hover handle before press; zero Move fails. Restore settings.json |
+| `--autotest-palette <dir>` (with `--cell`) | Scratch active file; three rock piles in palette, five objects around focus with random selection/rotation/scale; save nothing, restore settings.json |
+| `--autotest-layers` (with `--cell`) | Layer of 40 cell statics: hide (excluded from drawing/picking), show/freeze; remove test layer afterward; remove empty layers.json if originally absent |
+| `--autotest-storymanager` | Build Story Manager tree, log node/event counts; move first node down under branch with two children, before/after order, Ctrl+Z |
+| `--autotest-quest [EditorID]` (with `--inspector-tab "Quest Stages"` / `"Quest Objectives"` / `"Quest Aliases"`) | Quest form through EditTarget: new stage/log/condition, change stage index (resort), objective with map target, specific-reference alias; write/read quest; undo/redo all; save nothing |
+| `--autotest-conditions` (prefer `--inspector-tab Conditions`) | Perk conditions through form EditTarget: function, parameter, operator, value, OR, global, new row/move; copy/paste to another perk; undo/redo all; save nothing |
+| `--autotest-refmore` (with interior `--cell`) | More properties on two references: fields, ignored by sandbox and encounter zone on both; two Ctrl+Z restore; save nothing |
+| `--autotest-together` | Three armors in Edit together: weight 9.5 in all, Ctrl+Z restores |
+| `--autotest-sheet <SIG>` | Type table (WEAP / ARMO / AMMO …): rows, empty cells by column (wrong path leaves whole column empty), weight edit/undo |
+| `--autotest-masters <dir>` | New plugin with unused Update.esm master in middle → save → Clean Masters → save: Update.esm removed, Dawnguard links intact |
+| `--autotest-savecheck <dir> <plugin>` | Copy existing plugin, override from former non-master, prepare save; leave new-master confirmation for screenshot. Original/copy SHA-256 unchanged before consent; validation temp file created. Missing confirmation/suitable data fails instead of waiting forever |
+| `--ui-scale <factor>` | UI scale for this run (`1.3` = 130%) |
+| `--theme <name>` | Theme for this run (`Theme.Palettes`, e.g. `Cobalt`, `"Windows Light"`) |
+| `--autotest-compare <FormID> [FormID...] [versions\|records]` | Compare first record's versions, then select all in Object Window and compare; log `autotest-compare:` color counts/differing rows; `versions`/`records` keeps only one window for screenshot |
 
-BMP переводится в PNG через System.Drawing (см. скрипты в истории разработки или любой конвертер).
+Convert BMP to PNG with System.Drawing or another converter.
 
-Контрольный прогон Unreleased 2026-11-11: Skyrim SE 1.5.97, профиль STB, Windows 11 x64.
-- 65 основных оконных сценариев; найденные отказы исправлены и проверены отдельно. Дополнительно —
-  Move-gizmo и delta-патч с добавленной/удалённой/изменёнными записями и undo.
-- 2566 полей: 0 неожиданных расхождений, 0 ошибок Set; 98 известных ограничений формата.
-  401 функция условий — запись/чтение, 2100 корректных копирований полей, 33502 NIF и 15113 PEX без ошибок чтения.
-- Независимый MCP Python SDK 2.3: пять конфигураций/миграций разрешений, новые ref ID, правки/undo,
-  снимок, применение/отклонение предложений настоящим UI-вводом, запрет C# и отзыв разрешения до commit.
-- Вывод — в TEMP вне игры/модов; settings/layout/layers восстановлены побайтно. Это не проверка всех
-  профилей/вариантов данных; предупреждения исходной сборки не объявляются исправлениями редактора.
-  Optional Claude Code CLI не запускался; проверен независимый MCP-доступ.
+Recorded Unreleased QA run, 2026-11-11: Skyrim SE 1.5.97, STB profile, Windows 11 x64.
+- 65 main windowed scenarios; failures found were fixed and checked separately. Additional checks:
+  Move gizmo and delta patch with added/deleted/changed records and undo.
+- 2566 fields: 0 unexpected differences, 0 Set errors; 98 known format limitations.
+  401 condition functions round-tripped, 2100 valid field copies, 33502 NIFs and 15113 PEXs without read errors.
+- Independent MCP Python SDK 2.3: five permission configurations/migrations, new reference IDs, edits/undo,
+  screenshot, proposal apply/reject through real UI input, C# denial and permission revocation before commit.
+- Output stayed in TEMP outside game/mod folders; settings/layout/layers restored byte-for-byte. This does
+  not cover all profiles/data variants; source-installation warnings are not claimed as editor fixes.
+  Optional Claude Code CLI was not run; independent MCP access was checked.
 
-Команды `stbedit-cli`:
+`stbedit-cli` commands:
 
-| Команда | Что делает |
+| Command | Behavior |
 |---|---|
-| `plugins` | load order, индексы, ошибки чтения |
-| `catalog` | построить каталог (и кэш) |
-| `find <текст>` | записи по EditorID / имени / FormID |
-| `assets <пути…>` | откуда берётся файл (loose / какой BSA) |
-| `extract <ассет> <файл>` | достать файл с учётом приоритетов |
-| `bsaextract <архив.bsa> <путь> <файл>` | достать файл из конкретного BSA (например, ванильный вместо мода) |
-| `nif [префикс]` | прочитать все NIF (33 тыс., ~20 с): ошибки, предупреждения, статистика частиц и билбордов |
-| `nifdump <меш>` | разбор одного NIF: шейпы, материалы, анимации, частицы |
-| `nifblocks <меш\|файл>` | блоки NIF (тип, размер, имя) и строки заголовка |
-| `facegenprobe <NPC> [плагин]` | части головы NPC, их меши и TRI (морфы), FaceGen CK |
-| `facegencheck <NPC\|#N> [--plugin X] [--faces] [--bad]` | вершины, посчитанные `FaceGenMorphs`, против FaceGen CK по типам частей (лица ванили в пределах 0,06 у 335 из 353) |
-| `voicecheck [плагин] [фильтр квестов]` | имена голосовых файлов и голоса реплик, которые выводит редактор, против файлов сборки: совпадения имён, найденные / пропущенные / лишние голоса, реплики без говорящего |
-| `idletree [глубина] [фильтр]` | дерево idle: сколько корней, у кого родитель — действие, сводка по графам, верхние уровни |
-| `hulltest <EditorID интерьера>` | строит выпуклые оболочки всех частей коллизии мешей ячейки по одной (ищет ту, на которой падает Bepu) |
-| `nifcollision <меш или EditorID…>` | коллизия Havok меша выпуклыми частями: сколько, вся ли прочитана, границы против меша |
-| `roomcheck [плагин]` | проблемы комнат и порталов в интерьерах плагина (по умолчанию Skyrim.esm), по видам |
-| `ls <папка> [расширение]` | ассеты под папкой (свободные и из BSA) и откуда каждый |
-| `frameworks [EditorID…]` | ссылки конфигов фреймворков по видам; для EditorID — их строки, у SPID — сколько NPC подходит; для NPC — что SPID ему выдаёт |
-| `filtereddialogue <EditorID NPC>` | реплики, которые может сказать NPC, сколько привязаны условием, первые |
-| `mergeplan <сигнатура> [n]` | что Merged Patch добавит и уберёт у записей этого вида (LVLI, CONT, NPC_, OTFT, FLST…) |
-| `navcheck <EditorID интерьера…>` | Check NavMeshes на навмешах ячеек: сколько проблем какого вида |
-| `deletednav` | плагины сборки (кроме базовых .esm) с удалёнными навмешами |
-| `mastersorttest <out> [плагин]` | копия плагина с мастерами не по порядку сохранена с Sort Masters: мастера в порядке загрузки, записи на месте |
-| `formidtest <out> <плагин>` | копия плагина, у его записи, на которую больше всего ссылок, новый FormID: старого нет, новый есть, все ссылки на новый |
-| `dialremovetest <out> <плагин>` | копия плагина, из темы убрана одна его реплика, как «Удалить реплику»: в теме ровно на одну меньше, остальное на месте |
-| `perktree <EditorID AVIF>` | узлы дерева перков навыка: столбец, строка, смещения, FNAM, перк, связи |
-| `landseam <мир> <x> <y> [радиус]` | шов на земле у точки из игры (`getpos`): 4 ячейки у ближайшего угла — у кого LAND (хэши высот / цветов / нормалей по плагинам), вода ячейки по плагинам с типом воды и кто его меняет, текстуры квадрантов, расхождения на общих краях (высоты, нормали, цвета, веса текстур по файлам diffuse — модель смешивания слоев приблизительная, расхождения 0.3–1.0 бывают и в ванили), нормали каждой версии LAND против соседей (чьи нормали перестают сходиться), высота земли в точке и объекты рядом |
-| `landseamfix <мир> <угол X> <угол Y> <плагин.esp>` | патч на текстурный шов у угла ячеек (в единицах сетки: 28 8 = 114688, 32768): в каждой вершине на четырёх общих краях квадранты, которые там сходятся, получают одну смесь текстур — непрозрачности их существующих слоев пересчитываются (основа, затем слои по порядку поверх); меняются только эти вершины; LAND копируются у победителей, плагин читается обратно и сверяется |
-| `prims [плагин]` | примитивы ссылок (XPRM) по типу и базе: сколько, сколько с масштабом ≠ 1, примеры с размерами и местом (полные размеры, не полу-) |
-| `navcover <EditorID интерьера> [N]` | что накрывает навмеш сверху: центры треугольников под непрозрачной геометрией 2..80 единиц выше, по порогам, и N самых глубоких мест с объектом |
-| `navgen <EditorID интерьера> [--cs N] [--radius N] [--climb N] [--big N] [--obj f.obj] [--game-obj f.obj] [--near x,y,z]` | сгенерировать навмеш ячейки (никуда не пишется) и сравнить с игровым: треугольники, площадь, обход, сколько каждый покрывает другого; `--big` — площадь отдельного куска, который остаётся без двери (0 — только связанные с дверями); `--near` — какие меши лежат под точкой |
-| `facegensliders #N` | по многим NPC: веса морфов ползунков лица, подобранные под файлы CK, против значений (проверка таблицы направлений) |
-| `facegentint #N [--plugin X] [--layers]` | тинт от `FaceGenTint` против тинта CK; `--layers` — какие типы слоёв CK действительно накладывает |
-| `facegenbuild <NPC> <папка> [--winner]` | экспорт FaceGen NPC в папку (не в игру) и сравнение с файлами CK: формы, вершины, шейдеры, текстуры, цвета, блоки, тинт |
-| `scene <EditorID ячейки> [--grep текст] [--shaders]` | собрать сцену ячейки, найти объекты |
-| `find <текст> --type NPC_` | поиск только по одному типу записей |
-| `npc <FormID\|EditorID>` | из каких мешей собран NPC: броня / ARMA / слоты, FaceGen, откуда файлы |
-| `npcscan [n]` | собрать внешность всех NPC: без внешности, без FaceGen, с отсутствующими мешами |
-| `reflect <интерфейс Mutagen>` | свойства интерфейса (например `INpcGetter`) — писать код без угадывания API |
-| `sweep [n]` | собрать n случайных ячеек (поиск падений) |
-| `savetest <игра> <ячейка> <папка> [плагин]` | проверка сохранения на копии плагина (0 расхождений нетронутых записей) |
-| `recordtest <игра> <папка> <плагин>` | пустая запись каждого создаваемого типа пишется и читается; на копии плагина — 100+ новых записей, удаление своей записи и override |
-| `cleanmasters <игра> <папка> <плагин> [добавить.esp]` | на копии: какие мастера не используются, сохранение с Clean Masters (и добавлением) — проверка сохранения должна быть чистой |
-| `papyrustest <игра> <папка> [QF_скрипт]` | компилятор, импорты и файл флагов найдены; все `QF_` / `TIF__` / `PF_` / `SF_*.psc` сборки разбираются и пишутся обратно без изменений; фрагмент настоящего квеста меняется и компилируется в `<папка>`; сломанный код даёт ошибку со строкой |
-| `looksprobe <игра> <NPC EditorID>` | поля внешности NPC (раса, части головы, морфы, тинт, вес…) в каждой версии — что именно отличается |
-| `findtest <игра> <плагин> <текст>` | поиск текста по плагину (все поля) и по каталогу: сколько, по типам, время |
-| `copytest <игра>` | копирование поля между версиями: каждое поле переопределённых записей 14 типов из старейшей версии в копию победителя — поле как у старейшей, остальные как у победителя |
-| `compacttest <игра> <плагин> <папка>` | сжатие FormID на копии: все свои записи в 0x800–0xFFF, число записей то же, ссылок на несуществующие свои записи 0, каждая запись равна исходной с перенумерованными ссылками; сколько записей сохранено байт в байт |
-| `bsatest <игра> <ванильный .bsa> <папка>` | хэш имён (`BsaWriter.Hash`) против каждой папки и файла ванильного архива; архив из 300 его файлов, записанный нашим писателем и прочитанный Mutagen байт в байт |
-| `itmtest <игра> <плагин>` | ITM и удалённые рефы плагина (сравнение с версией мастера), время; самопроверка — 300 записей разных типов должны быть равны сами себе |
-| `checktest <игра> <плагин>` | Check for Errors по плагину: ошибки и предупреждения, сгруппированные по виду |
-| `udrtest <игра> <папка>` | плагин с удалённым ванильным рефом: проверка его находит, исправление пишет его undeleted, initially disabled, z −30000, enable parent игрок (наоборот) |
-| `finalizetest <игра> <интерьеры,через,запятую> <мир> <x> <y>` | Finalize на копиях ванильных навмешей против данных CK: треугольники дверей и XNDP интерьеров; связи рёбер центральной клетки сетки 3×3 (её связи стираются и строятся заново) |
-| `navprobe <игра> <ячейка>` | как игра связывает навмеш, двери и NAVI в ячейке; константы NAVI (Unknown2 = CRC A5E9A03C, двери E48B73F3) |
-| `packprobe <игра> [EditorID…]` | классы входных данных и целей пакетов, статистика (шаблоны, процедуры); у названных пакетов — шаблон, входы с именами, дерево процедур, расписание |
-| `packtest <игра> <папка>` | биты флагов (Wear Sleep Outfit = бит 29); все деревья процедур разбираются в одно дерево; новый пакет из шаблона Sandbox пишется и по подзаписям совпадает с ванильным `DefaultSandboxCurrentLocation256` (различия только в его собственных значениях), читается обратно |
-| `sceneprobe <игра> [EditorID]` | что лежит в ванильных сценах (ширины фаз, служебные блоки, виды действий, флаги актёров, значения реплик по умолчанию); подзаписи одной сцены из Skyrim.esm |
-| `scenetest <игра> <папка>` | `dunFellglow_ReleaseDogs`, собранная через `Core/Scenes` в новом плагине, по подзаписям совпадает с ванильной; вставка и удаление фазы сдвигают действия |
-| `fragprobe <игра>` | как ванильные пакеты и сцены хранят фрагменты (версии привязки, флаги фаз) и исходники PF_ / SF_ |
-| `fragtest <игра> <папка>` | таблицы фрагментов всех пакетов, сцен и перков указывают на функции из исходников; пакет, сцена и перк получают новый код, компилируются в `<папку>`, привязываются к копии записи и читаются обратно; вставка фазы сдвигает фрагменты фаз |
-| `aliastest <игра> [квест] [ID алиаса \| all]` | «Где используется» алиаса по квесту, его сценам, пакетам и репликам (по умолчанию стражник из `dunFellglow_ReleaseDogs`); `all` — по каждому алиасу квеста |
-| `texttest <игра> <плагин> <папка>` | тексты плагина → JSON → читаются те же; каждый 7-й «переводится» и применяется к копии своей записи (реплики — под темой), записи пишутся и читаются обратно с переводом |
-| `navsplittest <игра> [n]` | у n интерьерных навмешей треть треугольников выносится в новый (`NavmeshTools.MoveTriangles`): числа сходятся, углы и флаги на месте, каждая связь соединяет треугольники с общим ребром |
-| `difftest <игра> <плагин> <другой файл>` | плагин против другой версии файла (`PluginDiff`): только здесь / только там / изменено с полями |
-| `mergetest <игра> [патч \| -] [папка]` | левел-листы для слияния по всему порядку загрузки (патч, если указан, не учитывается); с папкой — патч пишется писателем в новый плагин и читается обратно |
-| `mergeshow <игра> <EditorID>` | все версии левел-листа предметов и результат слияния |
-| `tintprobe <игра> [плагин]` | у скольких NPC плагина тинт тела (QNAM) совпадает с формулой CK от слоя «тон кожи» (`BodyTint`) |
-| `dialtest <игра> <папка> [плагин]` | писатель диалогов: реплика ванильной темы, новая реплика, приоритет темы → в плагине тема ровно с этими двумя репликами (с плагином — на его копии, lossy 0) |
-| `condtest <игра>` | условия: все условия PERK / MGEF / PACK / QUST / IDLE / COBJ / SPEL / LSCR описываются строкой CK (0 ошибок); каждая из ~400 функций ставится в условие перка (через раз — с глобальной), пишется и читается обратно — всё должно совпасть |
-| `usetest <игра> <EditorID\|FormID>...` | индекс «где используется»: время (с нуля / из кэша), сколько ссылок, кто использует запись; каждое попадание в обычной записи проверяется списком ссылок Mutagen (FALSE — ложное совпадение, его скрывает окно) |
-| `strtest <игра> <EditorID>` | название записи в каждом плагине (проверка поиска .strings у мастеров из модов MO2) |
-| `mastertest <игра> <папка> <плагин>` | на копии плагина правка записи из плагина, который ещё не его мастер: сохранение с новым мастером, список записей, вышедших не байт-в-байт (с учётом сдвига FormID) |
-| `newtest <папка> [плагин]` | новые ячейка, мир, ячейки по сетке и объекты в них — в новый плагин или в копию существующего (lossy должно быть 0) |
-| `landtest [n]` | LAND → `LandscapeData` → LAND на n ячейках: высоты и слои должны совпасть, нормали — статистика |
-| `proptest <папка> [плагин]` | свойства рефов (замок, владелец, linked ref, флаги, телепорт, скрипт), override STAT и правка своей записи — сохранение и чтение |
-| `pex [скрипт]` | прочитать все .pex (15 тыс., ~1 с) или показать свойства одного скрипта с родителями |
-| `vmadfind <сигнатура>` | базовые записи типа со скриптами |
-| `navtest [n]` | для n навмешей пересобрать сетку поиска и соседства как редактор: сетка должна содержать всё из игровой, соседства — совпасть |
-| `mathtest`, `cellat` | проверки математики поворотов (в т.ч. поворот мышью, удержанный на 180°: объект не должен сдвинуться) и поиска ячейки |
-| `formtest <папка> [n] [сигнатуры…]` | **правка всех форм**: n записей каждого типа, каждое редактируемое поле меняется через `RecordFields` (как в UI), в каждый список добавляется строка → новый плагин → чтение обратно. «unexpected» должно быть 0; «format» — ограничения формата, которые Inspector помечает «!» |
-| `plugins --only a.esm,b.esp` | загрузить только эти плагины и их мастера (как выбор в «Данных») |
-| `memprobe <EditorID экстерьерной ячейки>` | память GC после каждого шага загрузки сетки 5×5 (постоянная ячейка мира, ячейки, сцена) — ищет, что держит память |
+| `plugins` | Load order, indices, read errors |
+| `catalog` | Build catalog/cache |
+| `find <text> [--type <signature>]` | Records by EditorID/name, optionally limited to one record type |
+| `assets <paths…>` | Winning file source: loose or specific BSA |
+| `extract <asset> <file>` | Extract respecting priorities |
+| `bsaextract <archive.bsa> <path> <file>` | Extract from specific BSA, e.g. vanilla rather than mod |
+| `nif [prefix]` | Read all NIFs (~33k, ~20 s): errors/warnings, particle/billboard statistics |
+| `nifdump <mesh>` | One NIF's shapes, materials, animation, particles |
+| `nifblocks <mesh\|file>` | NIF blocks (type/size/name), header strings |
+| `facegenprobe <NPC> [plugin]` | NPC head parts, meshes/TRI morphs, CK FaceGen |
+| `facegencheck <NPC\|#N> [--plugin X] [--faces] [--bad]` | `FaceGenMorphs` vertices versus CK FaceGen by part type (335 of 353 vanilla faces within 0.06) |
+| `voicecheck [plugin] [quest-filter]` | Editor-derived voice filenames/speakers versus installation: name matches, found/missing/extra voices, speakerless lines |
+| `idletree [depth] [filter]` | Idle roots, action parents, graph summary, upper levels |
+| `hulltest <interior EditorID>` | Build convex hulls for cell mesh collision pieces individually to locate Bepu crashes |
+| `nifcollision <mesh-or-EditorID…>` | Havok convex pieces: counts, completeness, bounds versus mesh |
+| `roomcheck [plugin]` | Interior room/portal issues by kind; default Skyrim.esm |
+| `ls <dir> [extension]` | Loose/BSA assets below directory and each source |
+| `frameworks [EditorID…]` | Config references by kind; named records' lines, SPID NPC match counts; NPC SPID gifts |
+| `filtereddialogue <NPC EditorID>` | Possible NPC lines, condition-bound count, first entries |
+| `mergeplan <signature> [n]` | Merged Patch additions/removals by record kind (LVLI, CONT, NPC_, OTFT, FLST…) |
+| `navcheck <interior EditorID…>` | Check NavMeshes issue counts by kind |
+| `deletednav` | Installation plugins excluding base .esm with deleted navmeshes |
+| `mastersorttest <out> [plugin]` | Save copy with unordered masters through Sort Masters; load-order masters and intact records |
+| `formidtest <out> <plugin>` | Change most-referenced own record's FormID in copy; old absent/new present, all links updated |
+| `dialremovetest <out> <plugin>` | Remove one own topic line through Delete line logic; exactly one fewer, others intact |
+| `perktree <AVIF EditorID>` | Skill tree nodes: column/row/offsets/FNAM/perk/links |
+| `landseam <world> <x> <y> [radius]` | Seam near game `getpos`: four cells at nearest corner, LAND owners (height/color/normal hashes by plugin), cell water/type/changers by plugin, quadrant textures, shared-edge differences (heights/normals/colors/texture weights by diffuse file; approximate layer blending, 0.3–1.0 differences also occur in vanilla), each LAND version's normals versus neighbors (whose normals stop matching), point height and nearby objects |
+| `landseamfix <world> <corner-X> <corner-Y> <plugin.esp>` | Texture-seam patch at cell corner (grid units: 28 8 = 114688, 32768): at each vertex on four shared edges, meeting quadrants receive one texture blend by recomputing existing layer opacities (base, then ordered overlays); only those vertices change; copy winning LAND, read back/compare plugin |
+| `prims [plugin]` | Reference XPRM by type/base: counts, non-unit scales, example full sizes (not half-extents)/positions |
+| `navcover <interior EditorID> [N]` | Triangle centers beneath opaque geometry 2..80 units above, threshold counts, N deepest places with covering object |
+| `navgen <interior EditorID> [--cs N] [--radius N] [--climb N] [--big N] [--obj f.obj] [--game-obj f.obj] [--near x,y,z]` | Generate without writing; compare game navmesh triangles/area/traversal/mutual coverage; `--big` is retained doorless-piece area (0 keeps door-connected only); `--near` identifies meshes beneath point |
+| `facegensliders #N` | Fit face-slider morph weights to CK files across NPCs, compare values to check direction table |
+| `facegentint #N [--plugin X] [--layers]` | `FaceGenTint` versus CK; `--layers` identifies layer types CK actually applies |
+| `facegenbuild <NPC> <dir> [--winner]` | Export outside game, compare CK shapes/vertices/shaders/textures/colors/blocks/tint |
+| `scene <cell EditorID> [--grep text] [--shaders]` | Build cell scene, find objects |
+| `find <plugin name> --plugin` | First named records added or overridden by that plugin |
+| `npc <FormID\|EditorID>` | Appearance meshes: armor/ARMA/slots, FaceGen, file sources |
+| `npcscan [n]` | Build all NPC appearances: missing appearance/FaceGen/meshes |
+| `reflect <Mutagen-interface>` | Interface properties (e.g. `INpcGetter`) without guessing APIs |
+| `sweep [n]` | Build n random cells to find crashes |
+| `savetest <game> <cell> <dir> [plugin]` | Save copied plugin; 0 untouched-record differences |
+| `recordtest <game> <dir> <plugin>` | Write/read blank record of every creatable type; 100+ new records, own-record/override removal on copy |
+| `cleanmasters <game> <dir> <plugin> [add.esp]` | On copy: unused masters, Clean Masters save (with addition); save comparison must be clean |
+| `papyrustest <game> <dir> [QF_script]` | Find compiler/imports/flags; parse/rewrite all installation `QF_` / `TIF__` / `PF_` / `SF_*.psc` unchanged; edit/compile real quest fragment into dir; broken code reports line error |
+| `looksprobe <game> <NPC EditorID>` | Appearance fields (race/head parts/morphs/tint/weight…) in each version, exact differences |
+| `findtest <game> <plugin> <text>` | Text search in all plugin fields/catalog: counts/types/time |
+| `copytest <game>` | Each overridden field of 14 types copied oldest → winner copy; target field matches oldest, others winner |
+| `compacttest <game> <plugin> <dir>` | Copy: own IDs in 0x800–0xFFF, same count, 0 dangling own links, each record equals source with remapped links; byte-preserved count |
+| `bsatest <game> <vanilla.bsa> <dir>` | `BsaWriter.Hash` versus all vanilla folder/file names; write archive of 300 files and read byte-identically with Mutagen |
+| `itmtest <game> <plugin>` | ITM/deleted references against master, timing; 300 mixed-type self-equality checks |
+| `checktest <game> <plugin>` | Check for Errors grouped errors/warnings |
+| `udrtest <game> <dir>` | Deleted vanilla reference found/fixed: undeleted, initially disabled, z −30000, inverted player enable parent |
+| `finalizetest <game> <comma,separated,interiors> <world> <x> <y>` | Vanilla-copy Finalize versus CK: interior door triangles/XNDP; central cell edge links in 3×3 grid cleared/rebuilt |
+| `navprobe <game> <cell>` | Game navmesh/door/NAVI relationships; NAVI constants Unknown2 = CRC A5E9A03C, doors E48B73F3 |
+| `packprobe <game> [EditorID…]` | Package input/target classes, template/procedure statistics; named package template/named inputs/tree/schedule |
+| `packtest <game> <dir>` | Flag bits (Wear Sleep Outfit = 29); every procedure list parses into one tree; new Sandbox template package writes matching vanilla `DefaultSandboxCurrentLocation256` subrecords except own values, reads back |
+| `sceneprobe <game> [EditorID]` | Vanilla phase widths/service blocks/action kinds/actor flags/dialogue defaults; one Skyrim.esm scene's subrecords |
+| `scenetest <game> <dir>` | New-plugin `dunFellglow_ReleaseDogs` from `Core/Scenes` matches vanilla subrecords; phase insertion/removal shifts actions |
+| `fragprobe <game>` | Vanilla package/scene fragment binding versions/phase flags, PF_ / SF_ sources |
+| `fragtest <game> <dir>` | All package/scene/perk fragment tables reference source functions; new code compiles in dir, binds to copies, reads back; phase insertion shifts phase fragments |
+| `aliastest <game> [quest] [alias-ID \| all]` | Alias uses in quest/scenes/packages/dialogue (default guard in `dunFellglow_ReleaseDogs`); `all` checks every alias |
+| `texttest <game> <plugin> <dir>` | Plugin texts → JSON → identical readback; “translate” every seventh, apply to own-record copies (lines under topics), write/read translated records |
+| `navsplittest <game> [n]` | Move one third of n interior navmeshes' triangles into new mesh (`NavmeshTools.MoveTriangles`); counts/angles/flags preserved, each link joins shared-edge triangles |
+| `difftest <game> <plugin> <other-file>` | `PluginDiff`: only here/there/changed with fields |
+| `mergetest <game> [patch \| -] [dir]` | Leveled-list merge across load order excluding named patch; with dir, writer saves new patch/readback |
+| `mergeshow <game> <EditorID>` | All item leveled-list versions and merge result |
+| `tintprobe <game> [plugin]` | NPC QNAM agreement with CK skin-tone-layer formula (`BodyTint`) |
+| `dialtest <game> <dir> [plugin]` | Writer: vanilla-topic line, new line, topic priority → exactly two lines in topic; optional plugin uses copy, lossy 0 |
+| `condtest <game>` | CK descriptions for all PERK/MGEF/PACK/QUST/IDLE/COBJ/SPEL/LSCR conditions, 0 errors; each ~400 function assigned to perk condition, alternating global, write/read agreement |
+| `usetest <game> <EditorID\|FormID>...` | Use index cold/cache time, reference counts/users; regular-record matches checked against Mutagen links (FALSE means false positive hidden by UI) |
+| `strtest <game> <EditorID>` | Name by plugin; check MO2 mod-master .strings lookup |
+| `mastertest <game> <dir> <plugin>` | Copy: edit record from non-master plugin, save with new master, list non-byte-identical records accounting for FormID shift |
+| `newtest <dir> [plugin]` | New cell/world/grid cells/objects into new plugin or copy; lossy must be 0 |
+| `landtest [n]` | LAND → `LandscapeData` → LAND for n cells: heights/layers match, normal statistics |
+| `proptest <dir> [plugin]` | Reference lock/owner/linked ref/flags/teleport/script, STAT override, own-record edit: save/read |
+| `pex [script]` | Read all .pex (~15k, ~1 s) or one script's properties with parents |
+| `vmadfind <signature>` | Base records of type with scripts |
+| `navtest [n]` | Rebuild n lookup grids/adjacencies as editor; grid superset of game's, adjacency identical |
+| `mathtest`, `cellat` | Rotation math (including mouse rotation held at 180° without translation), cell lookup |
+| `formtest <dir> [n] [signatures…]` | **Edit all forms**: n records/type, every editable field via `RecordFields` like UI, add each list row → new plugin → readback. `unexpected` must be 0; `format` denotes Inspector `!` limitations |
+| `plugins --only a.esm,b.esp` | Load listed plugins and masters, like Data selection |
+| `memprobe <exterior-cell EditorID>` | GC memory after 5×5 loading stages (world persistent cell, cells, scene), to identify retained memory |
 
-## Перевод интерфейса
+## UI translation
 
-Код пишется с английскими строками: `T("Text")`, для интерполяции `TF($"{n} objects")` (ключ — формат
-`"{0} objects"`), заголовки окон — `Title("Name")` (`"Текст###Name"`, чтобы раскладка не зависела от языка).
-Русский — словарь `src/Editor.App/Ui/LangRu.cs` (английский → русский). Строки без перевода остаются
-английскими, ничего не ломается.
+Code uses English strings: `T("Text")`, interpolation `TF($"{n} objects")` (key `"{0} objects"`),
+and window titles `Title("Name")` (`"Translated text###Name"`, preserving language-independent layouts).
+Russian is the English → Russian dictionary `src/Editor.App/Ui/LangRu.cs`. Missing translations remain
+English without breaking functionality. The application remains bilingual.
 
 ```powershell
-python tools/loc.py missing          # ключи, которых нет в LangRu.cs — перевести перед коммитом
-python tools/loc.py wrap <файл.cs>   # обернуть видимые строки нового файла в T()/TF() (--dry — только список)
+python tools/loc.py missing          # Translate missing LangRu.cs keys before committing
+python tools/loc.py wrap <file.cs>   # Wrap a new file's visible strings in T()/TF(); --dry only lists
 ```
 
-Таблицы подписей в `static readonly` массивах переводятся там, где рисуются (`T(label)`), не при объявлении.
+`missing` prints missing keys to stdout and their count to stderr; it exits 1 when keys are missing,
+0 otherwise. Label tables in `static readonly` arrays are translated when drawn (`T(label)`), not at declaration.
 
-## Правила (каждое стоило времени)
+## Hard-won invariants
 
-- **Никогда не писать в сборку пользователя при тестах** — только копии в отдельной папке.
-- Текст в плагинах — кодировка на каждую строку (UTF-8 с откатом на cp1251), см. `StringEncodingDetector`.
-- Не вызывать нетипизированные `LinkCache.TryResolve(key)` / `ResolveAllSimpleContexts(key)` — индексируют миллион REFR (19 с). Только `RecordLookup` по сигнатуре.
-  Где стоит реф, через Mutagen не искать вовсе: для дверей есть `DoorIndex` (сырой проход по файлам, ~1 с).
-- **Группы плагина обходить один раз.** Оверлей Mutagen читает байты группы в память при каждом обходе,
-  и каждая взятая из неё запись держит эту копию: обход мира на каждую ячейку держал по копии всего
-  Тамриэля Skyrim.esm (~200 МБ) на ячейку — 5 ГБ на сетку 5×5, ПК на 16 ГБ зависал. Ячейки ищутся через
-  `RecordLookup.ModCells` (индекс на плагин). Проверка — `memprobe`, `--autotest-fly`.
-- **Поля записей — только через `Core/RecordFields`** (обход, редактируемость, `Set` по пути, добавление
-  строк). UI (`FormView`, `PropertyTree`, `FieldEditors`) не трогает Mutagen-объекты сам; так `formtest`
-  проверяет ровно то, что делает интерфейс. Правка структуры снимает её «Break»-флаги (`Unbreak`), иначе
-  Mutagen не пишет поля после обрыва. Новые строки получают все вложенные части (`FillRequired`).
-- **Условия (CTDA)** — `Core/Conditions.cs`: в Mutagen функция условия — это *класс* его данных
-  (`GetIsIDConditionData` и т. д., по классу на функцию, параметры — его свойства), «Use Global» — класс самого
-  условия (`ConditionGlobal` вместо `ConditionFloat`), «параметры — алиасы / данные пакета» — флаги данных, а
-  параметр-форма — `IFormLinkOrIndex` (ссылка или номер). Смена функции = новые данные этого класса
-  (`SetFunction`), смена Use Global = замена элемента списка (`WithGlobal`). UI — `Ui/ConditionsEditor.cs`,
-  подключается в `FormView` к любому списку условий. Проверка — `condtest`, `--autotest-conditions`.
-- **Papyrus** — `Data/Papyrus.cs` (`PapyrusSetup`: компилятор, папки исходников по приоритету MO2 + выключенные моды,
-  вывод рядом с плагином, запуск компилятора и разбор ошибок `file(line,col): text`). Скрипт фрагментов квеста —
-  `Core/QuestFragments.cs` (`FragmentScript` разбирает и пишет формат CK, `QuestFragments.Merge/Apply` — таблица
-  фрагментов и свойства `Alias_` в VMAD). UI — `Panels/QuestEditor.Fragments.cs`, `Panels/ScriptSourceWindows.cs`.
-  Новый .pex сразу виден редактору: `AssetFileSystem.AddLoose` (карта заменяется целиком — её читают потоки
-  загрузки) и `ScriptLibrary.Forget`. SEQ — `Data/Raw/SeqFile.cs`, пишется в `SaveController.Commit`.
-- **Поиск текста** — `Core/TextSearch.cs` (листья `RecordFields` каждой записи плагина; у реплик — тема для правки;
-  `Display` = переводимая строка, только её меняет замена) и `Panels/FindTextWindow.cs`.
-- **Копирование поля** — `Core/MemberCopy.cs`: `DeepCopyIn(…, ErrorMaskBuilder, TranslationCrystal)` с маской, где
-  явно включено одно поле, остальные выключены (null у пар «м/ж» значит «копировать»). Mutagen всё равно копирует
-  скелет расы — поэтому до копии снимок, после — всё, что поменялось кроме поля, возвращается из снимка. Столбцы
-  сравнения версий идут от первого плагина к победителю; цель «взять значение» — правка или победитель.
-- **Сжатие FormID** — `Core/FormIdCompactor.cs` (план: новые номера только тем, кто вне 0x800–0xFFF; применение:
-  `Duplicate` с новым ключом там, где запись лежит — группы, ячейки и их дети, миры, темы и реплики; потом
-  `RemapLinks`) и `PluginWriter.Compact` (весь плагин читается, пишется с теми же мастерами, нетронутые записи —
-  `RawSplice`). Записи, которые сами не двигаются и ни на кого из перенумерованных не ссылаются, — «нетронутые».
-- **BSA** — `Assets/BsaWriter.cs`: версия 105, флаги «имена папок и файлов», данные без сжатия; папки и файлы по
-  возрастанию хэша; смещение папки = её блок + общая длина имён файлов (особенность формата). UI —
-  `Panels/ArchiveWindow.cs`.
-- **Проверка и очистка** — `Core/PluginChecks.cs`. ITM: версия плагина против версии ближайшего *мастера* плагина
-  (как xEdit), без служебных полей заголовка и сжатия; контейнеры (CELL / WRLD / DIAL) — только заголовок. Равенство
-  Mutagen сравнивает пары «мужское / женское» (GenderedItem: модели брони, данные расы) по ссылке — для таких типов
-  при «не равно» сравниваются все поля (`RecordFields.Leaves`). Ошибки: только ссылки на отсутствующие записи (тип
-  ссылки у Mutagen строже игры — проверка типа давала ложные ошибки на параметрах условий); формы Skyrim.esm до 0x800
-  зашиты в движке. FaceGen нужен NPC, чья раса с FaceGenHead и без шаблона черт. UI — `Panels/PluginCheckWindow.cs`.
-- **Finalize навмеша** — `Core/NavmeshFinalize.cs` (что пишет CK, выяснено по данным игры: треугольник двери = под
-  точкой прибытия, то есть маркером телепорта *другой* двери; XNDP двери указывает на него; связи рёбер — рёбра на
-  одной линии с перекрытием, пары один к одному, тип 0; NAVI каждого плагина содержит только его навмеши — игра их
-  сливает). Сборка шагов (навмеши, двери, NAVI — один Ctrl+Z) — `Panels/RenderWindow.NavmeshFinalize.cs`.
-  Проверка — `finalizetest`, `--autotest-finalize`.
-- **Заголовки ячеек и миров** — черновик `RecordPlace.Header` (копия без рефов: `HeaderCopies`, `WorkingCopy` делает её
-  сама для CELL / WRLD); писатель в конце накладывает поля на ячейку / мир плагина (`DeepCopyIn` с той же маской).
-  Освещение открытого интерьера берётся из правки (`SceneBuilder.InteriorLightingOf`). UI — `Panels/PlacePropertiesWindows.cs`.
-- **Диалоги**: реплики (INFO) не в каталоге — `Data/DialogueIndex` (квест → темы и ветки, ~0.2 с, в фоне) и
-  `DialogueIndex.Lines` (реплики темы со всех плагинов: каждая — последняя версия, порядок появления). Правка реплики —
-  черновик `RecordPlace.DialogInfo` с темой в `Cell`; писатель кладёт её в тему плагина (заголовочная копия темы, если
-  её там нет), тема попадает в «тронутые» — Mutagen пересчитывает TIFC. Правка самой темы оставляет в ней только
-  реплики, что уже были в плагине. UI — `Panels/DialogueEditor.cs` (+ `.Fragments.cs`).
-- `RecordRoundTrip`: запись пишется одна во временный плагин и читается обратно — так Inspector знает,
-  что формат сохранит иначе («!»), и отклоняет правки, ломающие запись.
-- Кэши мешей и текстур (`AsyncCache`) выгружают то, что не рисовалось 20 с, сверх бюджета видеопамяти.
-  Кто держит `GpuModel`, проверяет `IsDisposed` и просит модель заново (так делает `SceneRenderer`).
-- Hexa.NET.ImGui: `InputText(..., ref string)` с флагом `EnterReturnsTrue` отдаёт набранный текст только по
-  Enter — для полей с поиском по вводу флаг не ставить, Enter ловить по клавише (`FormField`). Навигация
-  клавиатурой включена: стрелки, которые нужны полю, забирать `ImGuiP.SetItemKeyOwner`.
-- ImGuizmo не начинает перетаскивание, если под мышью элемент ImGui (в этом и прошлом кадре): над ручкой
-  гизмо кнопка окна рендера не рисуется. Поворот ImGuizmo прибавляет к поданной матрице — во время
-  перетаскивания подавать его же матрицу с прошлого кадра. Перед `DestroyContext` — `ImGuizmo.SetImGuiContext(null)`,
-  иначе падение при выходе.
-- Сохранение: Mutagen нормализует нетронутые записи и выкидывает «лишние» мастера — поэтому
-  `PluginWriter` сохраняет все исходные мастера и восстанавливает байты нетронутых записей (`RawSplice`).
-  `CompareUntouched` должен давать 0.
-- `<CETCompat>false</CETCompat>` в Editor.App.csproj — иначе под MO2 (usvfs) процесс падает при старте.
-- Поворот рефа = `NiMatrix3::SetEulerAnglesXYZ`, треугольники NIF — CCW (`FrontCounterClockwise = true`).
-- Узлы `EditorMarker` игра прячет по имени — рисуем их только с Markers.
-- Факторы смешивания NiAlphaProperty с `*_COLOR` недопустимы для альфа-канала D3D11 — подменяются.
-- Поведение шейдеров игры сверяем с исходниками Community Shaders (`mods\Community Shaders\Shaders\*.hlsl`
-  в сборке) — это переписанные игровые шейдеры. Подробности — [RENDERING.md](RENDERING.md).
-- Поля NIF — по niftools `nif.xml` (версия 20.2.0.7, BS 83 = LE, 100 = SSE). Неизвестные блоки
-  пропускаются по таблице размеров — новый тип блока не ломает файл.
+- **Never write into users' game/mod installations during tests**: use copies in a separate directory.
+- Plugin text uses per-string encoding (UTF-8 with cp1251 fallback); see `StringEncodingDetector`.
+- Never call untyped `LinkCache.TryResolve(key)` / `ResolveAllSimpleContexts(key)`: they index a million REFRs
+  (19 s). Use signature-typed `RecordLookup`. Do not locate placed references through Mutagen;
+  doors use `DoorIndex` (raw file scan, ~1 s).
+- **Traverse plugin groups once.** Mutagen overlays read group bytes on every traversal; each returned
+  record retains that copy. Per-cell world traversal retained a whole Skyrim.esm Tamriel copy (~200 MB)
+  per cell: 5 GB for 5×5 and freezes on 16 GB machines. Use per-plugin `RecordLookup.ModCells` indices.
+  Checks: `memprobe`, `--autotest-fly`.
+- **Record fields go through `Core/RecordFields`**: traversal/editability/path `Set`/row insertion.
+  UI (`FormView`, `PropertyTree`, `FieldEditors`) must not mutate Mutagen objects directly, so `formtest`
+  exercises the same operations. Struct edits clear Break flags (`Unbreak`), otherwise Mutagen omits
+  later fields. New rows initialize required nested parts (`FillRequired`).
+- **Conditions (CTDA)**: `Core/Conditions.cs`. A Mutagen condition function is its data *class*
+  (`GetIsIDConditionData`, one class/function, properties as parameters). Use Global is the condition
+  class (`ConditionGlobal` rather than `ConditionFloat`); alias/package-data parameters are data flags;
+  form parameters use `IFormLinkOrIndex` (link or index). `SetFunction` creates new data of the class;
+  `WithGlobal` replaces the list item. `Ui/ConditionsEditor.cs` hooks into every `FormView` condition list.
+  Checks: `condtest`, `--autotest-conditions`.
+- **Papyrus**: `Data/Papyrus.cs`, `PapyrusSetup` finds compiler/source directories by MO2 priority including
+  disabled mods, outputs beside plugin, invokes compiler/parses `file(line,col): text` errors.
+  `Core/QuestFragments.cs`: `FragmentScript` parses/writes CK format; `QuestFragments.Merge/Apply`
+  manages fragment tables and VMAD `Alias_` properties. UI: `Panels/QuestEditor.Fragments.cs`,
+  `Panels/ScriptSourceWindows.cs`. New .pex is immediately available through `AssetFileSystem.AddLoose`
+  (replace entire map because loading threads read it) and `ScriptLibrary.Forget`.
+  `Data/Raw/SeqFile.cs` writes SEQ in `SaveController.Commit`.
+- **Text search**: `Core/TextSearch.cs` visits `RecordFields` leaves of every plugin record; dialogue
+  lines retain topics for editing. `Display` denotes translatable text, the only kind replacement changes.
+  UI: `Panels/FindTextWindow.cs`.
+- **Field copy**: `Core/MemberCopy.cs` uses `DeepCopyIn(…, ErrorMaskBuilder, TranslationCrystal)` with
+  exactly one field enabled (null gendered-pair entries mean copy). Mutagen still copies race skeletons;
+  snapshot before copying and restore all unrelated changes afterward. Version columns run first plugin
+  to winner; Take value targets the edit or winner.
+- **FormID compaction**: `Core/FormIdCompactor.cs` computes new IDs only outside 0x800–0xFFF, applies
+  `Duplicate` at the record's actual location (groups, cells/children, worlds, topics/lines), then `RemapLinks`.
+  `PluginWriter.Compact` reads/writes the whole plugin with the same masters, using `RawSplice` for untouched
+  records: those neither moved nor referencing remapped records.
+- **BSA**: `Assets/BsaWriter.cs`, version 105, folder/file-name flags, uncompressed data, ascending
+  folder/file hashes. Folder offset = its block + total filename length (format peculiarity).
+  UI: `Panels/ArchiveWindow.cs`.
+- **Check and clean**: `Core/PluginChecks.cs`. ITM compares against nearest *master* version like xEdit,
+  ignoring header service fields/compression; CELL/WRLD/DIAL containers compare headers only.
+  Mutagen compares GenderedItem pairs (armor models/race data) by reference, so unequal results for those
+  types compare all `RecordFields.Leaves`. Errors check missing links only: Mutagen's stricter link types
+  cause false positives for condition parameters. Skyrim.esm IDs below 0x800 are engine-defined.
+  FaceGen is needed for NPCs with FaceGenHead races and no Traits template. UI: `Panels/PluginCheckWindow.cs`.
+- **Navmesh Finalize**: `Core/NavmeshFinalize.cs` follows game data: door triangle lies under arrival point,
+  i.e. the *other* door's teleport marker; door XNDP references it. Edge links pair collinear overlapping
+  edges one-to-one, type 0. Each plugin NAVI contains only its own navmeshes; the game merges them.
+  `Panels/RenderWindow.NavmeshFinalize.cs` commits meshes/doors/NAVI in one undo step.
+  Checks: `finalizetest`, `--autotest-finalize`.
+- **Cell/world headers**: `RecordPlace.Header` drafts copy without references through `HeaderCopies`;
+  `WorkingCopy` does this automatically for CELL/WRLD. Writer applies fields to plugin cell/world at the
+  end using masked `DeepCopyIn`. Open-interior lighting reads edits through `SceneBuilder.InteriorLightingOf`.
+  UI: `Panels/PlacePropertiesWindows.cs`.
+- **Dialogue**: INFO lines are outside catalog. `Data/DialogueIndex` builds quest → topics/branches in
+  background (~0.2 s); `DialogueIndex.Lines` merges all plugins' topic lines, latest versions in appearance order.
+  A line edit is `RecordPlace.DialogInfo` with topic in `Cell`; writer inserts it into plugin topic
+  (header-only topic copy if absent), marking topic touched so Mutagen updates TIFC. Topic edits retain
+  only lines already in plugin. UI: `Panels/DialogueEditor.cs` and `.Fragments.cs`.
+- `RecordRoundTrip` writes one record to a temporary plugin/readback, identifying format normalization
+  for Inspector `!` notes and rejecting edits that would break readability.
+- Mesh/texture `AsyncCache` evicts assets not drawn for 20 s when over video-memory budget.
+  `GpuModel` holders check `IsDisposed` and request again, as `SceneRenderer` does.
+- Hexa.NET.ImGui `InputText(..., ref string)` with `EnterReturnsTrue` returns typed text only on Enter.
+  Omit the flag for live searches and handle the Enter key separately (`FormField`). Keyboard navigation
+  is enabled; fields needing arrows claim them with `ImGuiP.SetItemKeyOwner`.
+- ImGuizmo cannot start dragging while an ImGui item is hovered in this or previous frame; omit the
+  viewport button over gizmo handles. Rotation adds to its input matrix: feed back its last matrix during
+  dragging. Call `ImGuizmo.SetImGuiContext(null)` before `DestroyContext` to avoid exit crashes.
+- Saving: Mutagen normalizes untouched records and drops “unused” masters. `PluginWriter` keeps original
+  masters and restores untouched bytes through `RawSplice`; `CompareUntouched` must report 0.
+- Keep `<CETCompat>false</CETCompat>` in Editor.App.csproj: otherwise MO2/usvfs crashes at startup.
+- Reference rotation is `NiMatrix3::SetEulerAnglesXYZ`; NIF triangles are CCW (`FrontCounterClockwise = true`).
+- The game hides `EditorMarker` nodes by name; draw only with Markers enabled.
+- NiAlphaProperty `*_COLOR` blend factors are illegal for D3D11 alpha channels and must be substituted.
+- Check shader behavior against Community Shaders sources (`mods\Community Shaders\Shaders\*.hlsl`
+  in the installation), rewritten game shaders. See [RENDERING.md](RENDERING.md).
+- NIF fields follow niftools `nif.xml` (20.2.0.7, BS 83 = LE, 100 = SSE). Unknown blocks are skipped
+  by the size table, so new block types do not break the file.
 
-## Как добавить…
+## Adding functionality
 
-- **Тип блока NIF** (рендер): `Editor.Nif/NifFile*.cs` — разбор, модель в `NifModel.cs` / `NifEffects.cs`;
-  прогнать `stbedit-cli nif` (0 падений) и `nifdump` на примере.
-- **Режим/проход рендера**: `SceneRenderer` + HLSL в `Shaders.cs`; проверить `--object-shot` и `--cell … --screenshot`.
-- **Панель**: класс в `Editor.App/Panels`, зарегистрировать в `EditorApp`, место в `Panel.DefaultLayout`.
-- **Правка рефа**: состояние в `RefState` / `EditDocument`, запись — `PluginWriter`; тест `savetest`.
+- **NIF block type for rendering**: parsing in `Editor.Nif/NifFile*.cs`, model in `NifModel.cs` / `NifEffects.cs`;
+  run `stbedit-cli nif` (0 crashes) and `nifdump` on an example.
+- **Rendering mode/pass**: `SceneRenderer` + HLSL in `Shaders.cs`; check `--object-shot` and `--cell … --screenshot`.
+- **Panel**: class in `Editor.App/Panels`, register in `EditorApp`, place in `Panel.DefaultLayout`.
+- **Reference edit**: state in `RefState` / `EditDocument`, saving in `PluginWriter`; check `savetest`.

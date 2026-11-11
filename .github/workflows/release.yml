@@ -30,7 +30,7 @@ jobs:
           $text = Get-Content CHANGELOG.md -Raw -Encoding utf8
           $match = [regex]::Match($text, "(?ms)^## $([regex]::Escape($version))\s*\r?\n(.*?)(?=^## |\z)")
           $notes = if ($match.Success) { $match.Groups[1].Value.Trim() } else { "STB Editor $version" }
-          $notes += "`n`nУстановка: распаковать архив в любую папку и запустить STBEditor.exe (.NET уже внутри)."
+          $notes += "`n`nInstallation: extract the archive to any folder and run STBEditor.exe (.NET is included)."
           Set-Content release-notes.md $notes -Encoding utf8
 
       - name: Publish
