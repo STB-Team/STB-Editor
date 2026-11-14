@@ -13,7 +13,7 @@ Launching through MO2 is optional: the editor reads its profile directly and sav
 
 ## Current capabilities
 
-Current version: **0.77.0** (workspace shell, alias scripts, collision fixes and AI/MCP).
+Current version: **0.77.1** (workspace shell, alias scripts, collision fixes and AI/MCP).
 These are implemented capabilities, not a claim that all game data has been exhaustively tested or
 that every Creation Kit or xEdit operation has an equivalent.
 
@@ -54,8 +54,11 @@ collapsed launcher in the AI / MCP window, not a requirement for other clients. 
 
 Get `STBEditor-<version>.zip` from [Releases](https://github.com/STB-Team/STB-Editor/releases/latest),
 extract it anywhere (for example `<game>\STB Editor\`) and run `STBEditor.exe`.
-No separate .NET installation is required. You may register it as an MO2 executable, but the editor
-can read the MO2 profile without being launched through MO2.
+The top level contains just `STBEditor.exe`, `README.txt` and the `app` subfolder holding all dependencies.
+Keep `app` beside the executable. For updates, replace the whole application folder instead of merging
+with an older flat distribution; settings remain in `%LOCALAPPDATA%\STBEditor`.
+No separate .NET installation is required. You may register the top-level executable in MO2, but the
+editor can read the MO2 profile without being launched through MO2.
 
 ## Build and run
 
@@ -66,7 +69,7 @@ dotnet build STB-Editor.sln -c Release
 src\Editor.App\bin\Release\net10.0-windows\win-x64\STBEditor.exe
 ```
 
-Portable archive: `package.ps1` → `dist\STBEditor-<version>.zip`. Extract anywhere; optionally add
+Portable archive: `package.ps1` (defaults to the project version) → `dist\STBEditor-<version>.zip`. Extract anywhere; optionally add
 `STBEditor.exe` to MO2 as an executable, like Creation Kit.
 
 Options: `--game <game folder>`, `--mo2 <folder|none>`, `--profile <name>`, `--open` (skip the dialog),

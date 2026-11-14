@@ -10,7 +10,7 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Also loose next to the exe: the window class loads it at the sizes Windows asks for. -->
+    <!-- Also loose beside the managed assembly: the window class loads it at the sizes Windows asks for. -->
     <None Include="app.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
@@ -28,4 +28,17 @@
     <ProjectReference Include="..\Editor.Nif\Editor.Nif.csproj" />
     <ProjectReference Include="..\Editor.Core\Editor.Core.csproj" />
   </ItemGroup>
+  <!-- The SDK apphost supports a relative managed DLL path; keep the real runtime beside that DLL.
+       Normal build/publish output stays unchanged unless package.ps1 requests the portable layout. -->
+  <Target Name="CreatePortableHost" AfterTargets="Publish"
+          DependsOnTargets="_GetAppHostPaths;_GetAppHostCreationConfiguration"
+          Condition="'$(PortableLayout)' == 'true'">
+    <CreateAppHost AppHostSourcePath="$(AppHostSourcePath)"
+                   AppHostDestinationPath="$(PublishDir)../$(AssemblyName).exe"
+                   AppBinaryName="app/$(AssemblyName)$(TargetExt)"
+                   IntermediateAssembly="@(IntermediateAssembly->'%(FullPath)')"
+                   WindowsGraphicalUserInterface="$(_UseWindowsGraphicalUserInterface)"
+                   DisableCetCompat="$(_DisableCetCompat)" />
+    <Delete Files="$(PublishDir)$(AssemblyName).exe" />
+  </Target>
 </Project>

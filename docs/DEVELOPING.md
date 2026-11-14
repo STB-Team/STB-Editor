@@ -10,6 +10,9 @@ Repository operating guidance: [AGENTS.md](../AGENTS.md).
 - `dotnet build STB-Editor.sln -c Debug` builds the solution.
 - `src\Editor.App\bin\Debug\net10.0-windows\win-x64\STBEditor.exe --game C:\Skyrim --open` runs against a game installation.
 - `package.ps1` creates the portable self-contained archive in `dist\`.
+  Packaging publishes dependencies into `app`, then uses the SDK's `CreateAppHost` task to bind the root
+  `STBEditor.exe` directly to `app/STBEditor.dll`. There is no extra launcher process or single-file extraction.
+  Keep `CETCompat=false` on this host too. Normal build/publish output is unaffected without `PortableLayout=true`.
 - Release: `## <version>` in `CHANGELOG.md` → commit → `git tag v<version>` → `git push origin v<version>`.
   GitHub Actions (`.github/workflows/release.yml`) builds with the same `package.ps1` and publishes to Releases,
   using that changelog section as release notes. Pushes to `main` and PRs build through `.github/workflows/build.yml`.

@@ -31,7 +31,7 @@ internal sealed unsafe class MainWindow
         _wndProc = Procedure;
         var instance = GetModuleHandle(null);
 
-        // app.ico next to the exe (the exe carries it too, for Explorer and MO2); the Windows default if it is missing.
+        // app.ico beside the managed assembly (the apphost carries it too, for Explorer and MO2); the Windows default if missing.
         static nint AppIcon(bool large)
         {
             var path = Path.Combine(AppContext.BaseDirectory, "app.ico");

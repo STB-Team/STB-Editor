@@ -2,6 +2,15 @@
 
 Each `## <version>` section is the release description on GitHub (see the Release section of `docs/DEVELOPING.md`).
 
+## 0.77.1
+
+- Portable distribution: only `STBEditor.exe` and `README.txt` at the top level; managed libraries,
+  native libraries, the icon and the self-contained .NET runtime live in `app`.
+  The executable is the normal native apphost pointing at `app/STBEditor.dll`, not a second-process launcher.
+  CET compatibility remains disabled for MO2, and C# scripting retains physical assembly files.
+- `package.ps1` defaults to the project version when `-Version` is omitted. Updates replace the whole
+  application folder instead of merging the new layout with an older flat distribution.
+
 ## 0.77.0
 
 - New workspace shell: **World**, **Records** and **Classic** layouts, quick save,
