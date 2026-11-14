@@ -130,10 +130,9 @@ internal sealed class Settings
     /// <summary>Interface size: 1 = 100 % (fonts and spacing), 0.75–2.</summary>
     public float UiScale { get; set; } = 1f;
 
-    /// <summary>Installed Windows font family and real face weight for interface text.</summary>
+    /// <summary>Interface font: an installed Windows family or a filename from the local fonts folder.</summary>
     public string UiFontFamily { get; set; } = "Segoe UI";
     public string UiFontWeight { get; set; } = "Regular";
-    public bool GameFontHeadings { get; set; } = true;
 
     /// <summary>Colour theme by name (<c>Theme.Palettes</c>).</summary>
     public string Theme { get; set; } = "STB";

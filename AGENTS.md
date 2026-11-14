@@ -16,6 +16,10 @@ repository documentation is English.
 
 ## Build, run and releases
 
+**Pushes and releases require an explicit request for the current task.** Never push commits or
+tags, or publish a GitHub release, automatically after finishing work. Permission from an earlier
+task does not carry forward. Local builds, packaging and installation do not authorize publication.
+
 ```powershell
 dotnet build STB-Editor.sln -c Debug
 src\Editor.App\bin\Debug\net10.0-windows\win-x64\STBEditor.exe --game C:\Skyrim --open
@@ -202,9 +206,11 @@ in the same settings directory (remove only when intentionally resetting layout)
 - Use `Theme.*` colors, not hard-coded colors. The style uses graphite surfaces/white-alpha
   highlights; `Ui/Studio.cs` owns edged controls, `Theme.Surfaces` structural surfaces,
   `Studio.BeginWindow/BeginPopupModal` and `WindowChrome` padded close targets. `Ui/UiFonts.cs` offers
-  installed Windows faces (Segoe UI by default) and real weights. Queue font changes between ImGui
-  frames; keep the context and existing font pointers alive. Optional Sovngarde headings come from
-  the user's build and can be disabled; never ship game fonts. Code/log fonts remain monospace.
+  installed Windows faces (Segoe UI by default) and user `.ttf`/`.otf` files in `fonts` beside the
+  executable. Discover added files at startup; custom choices use their filename and intrinsic weight.
+  One selected face covers the interface, including record headings; code/logs remain monospace.
+  Queue font changes between ImGui frames; keep the context and existing font pointers alive.
+  Never bundle fonts from the user's game or Windows installation.
   Keep a plain-space digit separator. For font portability, prefer x, +, <-> to missing symbols.
 - Every visible string uses `T`, `TF` or `Title` (`Ui/Loc.cs`) and a Russian `Ui/LangRu.cs` entry.
   `python tools/loc.py missing` must exit 0 with no missing keys on stdout (`0 missing` on stderr); see

@@ -13,7 +13,7 @@ Launching through MO2 is optional: the editor reads its profile directly and sav
 
 ## Current capabilities
 
-Current version: **0.77.3** (workspace shell, alias scripts, collision fixes and AI/MCP).
+Current version: **0.77.4** (workspace shell, alias scripts, collision fixes and AI/MCP).
 These are implemented capabilities, not a claim that all game data has been exhaustively tested or
 that every Creation Kit or xEdit operation has an equivalent.
 
@@ -54,9 +54,10 @@ collapsed launcher in the AI / MCP window, not a requirement for other clients. 
 
 Get `STBEditor-<version>.zip` from [Releases](https://github.com/STB-Team/STB-Editor/releases/latest),
 extract it anywhere (for example `<game>\STB Editor\`) and run `STBEditor.exe`.
-The top level contains just `STBEditor.exe`, `README.txt` and the `app` subfolder holding all dependencies.
-Keep `app` beside the executable. For updates, replace the whole application folder instead of merging
-with an older flat distribution; settings remain in `%LOCALAPPDATA%\STBEditor`.
+The top level contains `STBEditor.exe`, `README.txt`, an `app` subfolder holding all dependencies,
+and an empty `fonts` folder for your own `.ttf` / `.otf` files.
+Keep `app` beside the executable. For updates, preserve your `fonts` folder and replace the application
+files rather than merging old and new dependencies; settings remain in `%LOCALAPPDATA%\STBEditor`.
 No separate .NET installation is required. You may register the top-level executable in MO2, but the
 editor can read the MO2 profile without being launched through MO2.
 
@@ -109,11 +110,11 @@ Record names retain the installed game's language; assets and appearance depend 
 - **View → Language** switches immediately between English and Russian.
 - **View → Settings** controls wheel/fly speed, door confirmation, NPC highlighting, FPS, language,
   15 color themes, UI size (75–200%; Ctrl+= / Ctrl+- / Ctrl+0), and record header fields (hidden by default).
-  **Interface font / Font weight** changes the installed Windows face immediately; available families are
-  Segoe UI, Arial, Tahoma, Verdana, Calibri and Consolas. Only installed Regular/Semibold/Bold faces are offered.
-  **Separate font for record headings** affects only EditorIDs and section titles in record forms, not window tabs.
-  Its detected filename and a real heading preview are shown; it is disabled when no separate font is found.
-  Turn it off to use the interface face for record headings too. Code/logs remain monospace; preferences persist.
+  **Interface font / Font weight** changes the face immediately throughout the interface, including record headings.
+  Installed Windows choices are Segoe UI, Arial, Tahoma, Verdana, Calibri and Consolas, with their real weights.
+  To add a custom font, place a `.ttf` or `.otf` file in `fonts` beside `STBEditor.exe` (Settings can open it),
+  restart, and select its filename under **Interface font**. A custom file defines its own style and weight.
+  Preserve your `fonts` folder when updating. No fonts are bundled; code/logs remain monospace and preferences persist.
 - **Help → Keys and features** (F1) lists keys and workflows.
 - **View** controls open windows (Log and Load Order start closed), FPS limits (60 foreground,
   15 background by default), and resetting the layout.

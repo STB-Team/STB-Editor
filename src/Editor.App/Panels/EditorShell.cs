@@ -24,42 +24,25 @@ internal static class EditorShell
             ImGui.SetCursorPos(new Vector2(em * 0.8f, em * 0.45f));
             var wide = size.X > em * 92;
             var narrow = size.X < em * 51;
-            ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, Vector2.Zero);
-            if (ImGui.BeginTable("##studioidentity", 2, ImGuiTableFlags.SizingStretchProp))
+            ImGui.BeginDisabled(app.Session is null);
+            var pending = app.Document.PendingCount;
+            var name = app.ActivePlugin?.Name ?? T("No active file");
+            var badge = pending > 0 ? TF($"{pending} unsaved") : T("Active file");
+            var documentWidth = ImGui.GetContentRegionAvail().X;
+            var badgeWidth = ImGui.CalcTextSize(badge).X + em * 0.8f;
+            var showBadge = documentWidth > badgeWidth + em * 8;
+            if (Studio.Button(name + "###shellactivefile", new Vector2(Math.Max(1, documentWidth - (showBadge ? badgeWidth : 0)), 0)))
+                app.ShowActiveFileDialog();
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                ImGui.SetTooltip((app.ActivePlugin?.Path ?? T("Choose the plugin that receives your edits"))
+                    + (pending > 0 ? "\n" + TF($"{pending} unsaved") : ""));
+            if (showBadge)
             {
-                ImGui.TableSetupColumn("##brand", ImGuiTableColumnFlags.WidthStretch, 1);
-                ImGui.TableSetupColumn("##document", ImGuiTableColumnFlags.WidthStretch, wide ? 0.8f : 1.2f);
-                ImGui.TableNextColumn();
+                ImGui.SameLine();
                 ImGui.AlignTextToFramePadding();
-                ImGui.TextColored(Theme.Accent, T("STB EDITOR"));
-                if (wide)
-                {
-                    ImGui.SameLine(0, em);
-                    ImGui.TextColored(Theme.TextDim, T("Creation studio"));
-                }
-                ImGui.TableNextColumn();
-                ImGui.BeginDisabled(app.Session is null);
-                var pending = app.Document.PendingCount;
-                var name = app.ActivePlugin?.Name ?? T("No active file");
-                var badge = pending > 0 ? TF($"{pending} unsaved") : T("Active file");
-                var columnWidth = ImGui.GetContentRegionAvail().X;
-                var badgeWidth = ImGui.CalcTextSize(badge).X + em * 0.8f;
-                var showBadge = columnWidth > badgeWidth + em * 8;
-                if (Studio.Button(name + "###shellactivefile", new Vector2(Math.Max(1, columnWidth - (showBadge ? badgeWidth : 0)), 0)))
-                    app.ShowActiveFileDialog();
-                if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-                    ImGui.SetTooltip((app.ActivePlugin?.Path ?? T("Choose the plugin that receives your edits"))
-                        + (pending > 0 ? "\n" + TF($"{pending} unsaved") : ""));
-                if (showBadge)
-                {
-                    ImGui.SameLine();
-                    ImGui.AlignTextToFramePadding();
-                    ImGui.TextColored(pending > 0 ? Theme.Warning : Theme.TextDim, badge);
-                }
-                ImGui.EndDisabled();
-                ImGui.EndTable();
+                ImGui.TextColored(pending > 0 ? Theme.Warning : Theme.TextDim, badge);
             }
-            ImGui.PopStyleVar();
+            ImGui.EndDisabled();
 
             ImGui.SetCursorPosX(em * 0.8f);
             if (wide)

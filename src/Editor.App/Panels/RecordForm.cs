@@ -58,11 +58,9 @@ internal sealed class RecordForm
         if (ImGui.BeginChild("##recordidentity", Vector2.Zero, ImGuiChildFlags.Borders | ImGuiChildFlags.AutoResizeY | ImGuiChildFlags.AlwaysUseWindowPadding))
         {
             ImGui.TextColored(Theme.Accent, $"{type?.Signature ?? "?"}  /  {session.Workspace.FormIdText(key)}");
-            ImGui.PushFont(app.Ui.HeaderFont, 0);
             var editorId = catalog?.EditorId ?? placedObject?.Record?.EditorID ?? (placedObject is not null ? placedObject.BaseEditorId ?? "" : T("(no editor id)"));
             if (compactIdentity) ImGui.TextUnformatted(editorId);
             else ImGui.TextWrapped(editorId);
-            ImGui.PopFont();
             if (compactIdentity && ImGui.IsItemHovered())
                 ImGui.SetTooltip($"{editorId}\n{catalog?.Name}\n{T(type?.Name ?? "?")} / {(_versions.Count > 0 ? _versions[0].Plugin : "")}\n"
                     + (placedObject is not null ? TF($"base {placedObject.BaseEditorId} [{placedObject.BaseSignature}]") + "\n" : "")
@@ -217,9 +215,7 @@ internal sealed class RecordForm
         var section = _sections.First(s => s.Id == _activeSection);
         if (ImGui.BeginChild("##recordsection", Vector2.Zero, ImGuiChildFlags.Borders | ImGuiChildFlags.AlwaysUseWindowPadding))
         {
-            ImGui.PushFont(app.Ui.HeaderFont, 0);
             ImGui.TextWrapped(section.Label);
-            ImGui.PopFont();
             ImGui.Separator();
             ImGui.PushID(section.Id);
             switch (section.Kind)

@@ -14,6 +14,7 @@ $zip = Join-Path $root "dist\STBEditor-$Version.zip"
 
 if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
 New-Item -ItemType Directory -Force $payload | Out-Null
+New-Item -ItemType Directory -Force (Join-Path $stage "fonts") | Out-Null
 
 & $dotnet publish (Join-Path $root "src\Editor.App\Editor.App.csproj") -c Release -r win-x64 --self-contained true `
     -p:Version=$Version -p:DebugType=none -p:SatelliteResourceLanguages=en -p:PortableLayout=true -o $payload
@@ -26,7 +27,10 @@ STB Editor $Version
 Extract to any folder, for example under the game folder: C:\Skyrim\STB Editor\
 Run STBEditor.exe (no installation needed; .NET is included).
 Keep the app subfolder beside STBEditor.exe: it contains all libraries and the bundled .NET runtime.
-For updates, replace the whole application folder; do not merge with an older flat distribution.
+Optional interface fonts: put your own .ttf or .otf files in fonts beside STBEditor.exe,
+restart the editor, then choose a filename in View -> Settings -> Interface font.
+Custom fonts use their own built-in style and weight. Code and logs stay monospace.
+For updates, preserve your fonts folder and replace the application files; do not merge app with an older flat distribution.
 
 With MO2: Executables (gears icon) -> + -> Add from file -> STBEditor.exe.
 No arguments are required. The editor reads the MO2 profile and mod folders itself,

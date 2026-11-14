@@ -18,18 +18,12 @@ internal sealed unsafe class ImGuiLayer : IDisposable
     public ImFontPtr DefaultFont { get; private set; }
     public ImFontPtr MonoFont { get; }
 
-    /// <summary>Display font for record titles (Sovngarde when the build has it).</summary>
-    public ImFontPtr HeaderFont { get; private set; }
-
     public string FontSource { get; private set; }
-    public string? GameHeaderFontSource { get; }
     private readonly Dictionary<string, ImFontPtr> _bodyFonts = new(StringComparer.OrdinalIgnoreCase);
     private readonly float _fontSize;
-    private readonly ImFontPtr _fallbackFont;
-    private readonly ImFontPtr? _gameHeaderFont;
-    private (string? Body, bool GameHeadings)? _pendingFont;
+    private UiFontFace? _pendingFont;
 
-    public ImGuiLayer(nint hwnd, GraphicsDevice graphics, float dpiScale, string iniFile, UiFonts fonts, bool gameHeadings)
+    public ImGuiLayer(nint hwnd, GraphicsDevice graphics, float dpiScale, string iniFile, UiFontFace? face)
     {
         _context = ImGui.CreateContext();
         ImGui.SetCurrentContext(_context);
@@ -48,17 +42,11 @@ internal sealed unsafe class ImGuiLayer : IDisposable
 
         // Only load the selected body face. Further choices are cached, keeping existing ImFont pointers alive.
         _fontSize = MathF.Round(16f * dpiScale);
-        DefaultFont = fonts.Body is { } body ? io.Fonts.AddFontFromFileTTF(body, _fontSize) : AddFont(io, ["segoeui.ttf", "arial.ttf"], _fontSize);
-        _fallbackFont = DefaultFont;
-        if (fonts.Body is { } path) _bodyFonts.Add(path, DefaultFont);
+        DefaultFont = face is not null ? io.Fonts.AddFontFromFileTTF(face.Path, _fontSize) : AddFont(io, ["segoeui.ttf", "arial.ttf"], _fontSize);
+        if (face is not null) _bodyFonts.Add(face.Path, DefaultFont);
         MonoFont = AddFont(io, ["consola.ttf", "cour.ttf"], MathF.Round(15f * dpiScale));
-        // A ternary ": null" selects ImFontPtr's implicit null conversion, not an empty nullable.
-        if (fonts.Header is { } header)
-            _gameHeaderFont = io.Fonts.AddFontFromFileTTF(header, MathF.Round(22f * dpiScale));
-        GameHeaderFontSource = fonts.Header;
-        HeaderFont = gameHeadings ? _gameHeaderFont ?? DefaultFont : DefaultFont;
         io.FontDefault = DefaultFont;
-        FontSource = fonts.Body ?? "ImGui default";
+        FontSource = face?.Path ?? "ImGui default";
 
         Theme.Apply(dpiScale);
 
@@ -84,26 +72,23 @@ internal sealed unsafe class ImGuiLayer : IDisposable
     }
 
     /// <summary>Apply outside the current ImGui frame; never recreate the context or discard open editors.</summary>
-    public void RequestFont(UiFontFace? face, bool gameHeadings) => _pendingFont = (face?.Path, gameHeadings);
+    public void RequestFont(UiFontFace face) => _pendingFont = face;
 
     private void ApplyPendingFont()
     {
         if (_pendingFont is not { } pending) return;
         _pendingFont = null;
-        var font = _fallbackFont;
-        if (pending.Body is { } path && !_bodyFonts.TryGetValue(path, out font))
+        if (!_bodyFonts.TryGetValue(pending.Path, out var font))
         {
             // The atlas is unlocked here. The official backend recreates its device objects in NewFrame.
             ImGuiImplD3D11.InvalidateDeviceObjects();
-            font = ImGui.GetIO().Fonts.AddFontFromFileTTF(path, _fontSize);
-            _bodyFonts.Add(path, font);
+            font = ImGui.GetIO().Fonts.AddFontFromFileTTF(pending.Path, _fontSize);
+            _bodyFonts.Add(pending.Path, font);
         }
         DefaultFont = font;
-        HeaderFont = pending.GameHeadings ? _gameHeaderFont ?? font : font;
         ImGui.GetIO().FontDefault = font;
-        FontSource = pending.Body ?? "ImGui default";
-        var headingSource = pending.GameHeadings ? GameHeaderFontSource : null;
-        StbEditor.App.Services.Log.Info($"UI font: {FontSource}; record headings: {headingSource ?? FontSource}");
+        FontSource = pending.Path;
+        StbEditor.App.Services.Log.Info($"UI font: {FontSource}");
     }
 
     /// <summary>Feeds a window message to ImGui. True when ImGui consumed it.</summary>

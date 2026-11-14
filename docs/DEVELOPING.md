@@ -21,12 +21,13 @@ Repository operating guidance: [AGENTS.md](../AGENTS.md).
 
 NuGet dependencies: Mutagen.Bethesda.Skyrim (plugins), Hexa.NET.ImGui + Backends + ImGuizmo (UI),
 Vortice.Direct3D11 / D3DCompiler (rendering), BepuPhysics (dropping/hulls), DotRecast (navmesh),
-Roslyn (C# scripts). `Ui/UiFonts.cs` discovers supported Windows font faces and game heading fonts.
+Roslyn (C# scripts). `Ui/UiFonts.cs` discovers supported Windows faces and user `.ttf`/`.otf` files in
+`fonts` beside the executable. Local font files are checked for supported SFNT tables before loading,
+offered by filename and use their intrinsic weight. Added files are discovered at startup.
 `Ui/ImGuiLayer.cs` queues face changes until the next frame, caches loaded faces and switches `io.FontDefault`
-without rebuilding the ImGui context or invalidating font pointers held by open UI. Code/logs remain monospace.
-Preferences are `UiFontFamily`, `UiFontWeight` and `GameFontHeadings`; game fonts are never distributed.
-The separate heading face is used only by `RecordForm` for EditorIDs and section titles. Settings displays
-`GameHeaderFontSource`, renders a preview using the same `HeaderFont`, and disables the option if no face was found.
+without rebuilding the ImGui context or invalidating font pointers held by open UI. The same face covers
+record headings; code/logs remain monospace. Preferences are `UiFontFamily` and `UiFontWeight`.
+The package creates an empty font folder; do not bundle Windows or game fonts. Preserve user fonts on installation updates.
 
 ## Architecture
 

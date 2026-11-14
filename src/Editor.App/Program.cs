@@ -34,20 +34,6 @@ internal static class Program
         }
     }
 
-    /// <summary>The game whose build fonts the UI uses; a failed detection just means no build fonts.</summary>
-    private static StbEditor.Data.GameInstall? FontGame(Settings settings, CommandLine options)
-    {
-        try
-        {
-            var folder = options.Game ?? settings.GameFolder ?? StbEditor.Data.GameInstall.FindInstalledGame();
-            return folder is null ? null : StbEditor.Data.GameInstall.Detect(folder, options.Mo2 ?? settings.Mo2Folder, options.Profile ?? settings.Mo2Profile);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     private static int Run(CommandLine options)
     {
         Win32.SetProcessDpiAwarenessContext(Win32.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -61,10 +47,8 @@ internal static class Program
             settings.UiFontFamily = face.Family;
             settings.UiFontWeight = face.Weight;
         }
-        using var imgui = new ImGuiLayer(window.Handle, graphics, window.DpiScale, AppPaths.ImGuiIni,
-            UiFonts.Find(FontGame(settings, options), face), settings.GameFontHeadings);
+        using var imgui = new ImGuiLayer(window.Handle, graphics, window.DpiScale, AppPaths.ImGuiIni, face);
         Log.Info($"UI font: {imgui.FontSource}");
-        Log.Info($"Record heading font: {(settings.GameFontHeadings ? imgui.GameHeaderFontSource ?? imgui.FontSource : imgui.FontSource)}; available: {imgui.GameHeaderFontSource ?? "none"}");
 
         Log.Info($"STB Editor {typeof(Program).Assembly.GetName().Version} on {graphics.AdapterName}");
 

@@ -4048,13 +4048,17 @@ internal sealed class EditorApp : IDisposable
         _settings.UiScale = Theme.UiScale;
     }
 
-    public void SetInterfaceFont(string family, string weight, bool gameHeadings)
+    public void SetInterfaceFont(string family, string weight)
     {
         var face = UiFonts.Resolve(family, weight);
-        _settings.UiFontFamily = face?.Family ?? family;
-        _settings.UiFontWeight = face?.Weight ?? weight;
-        _settings.GameFontHeadings = gameHeadings;
-        _imgui.RequestFont(face, gameHeadings);
+        if (face is null || !UiFonts.IsSupportedFile(face.Path))
+        {
+            Log.Warn($"Cannot select font: {face?.Path ?? family}");
+            return;
+        }
+        _settings.UiFontFamily = face.Family;
+        _settings.UiFontWeight = face.Weight;
+        _imgui.RequestFont(face);
     }
 
     private void HandleShortcuts()

@@ -2,6 +2,16 @@
 
 Each `## <version>` section is the release description on GitHub (see the Release section of `docs/DEVELOPING.md`).
 
+## 0.77.4
+
+- Removed the duplicate application name and "Creation studio" branding from the editor toolbar.
+  The native window title remains; the active-file selector uses the freed horizontal space.
+- Removed the separate game-font heading toggle and automatic game font discovery. The selected interface
+  font now also covers record EditorIDs and section headings; code and logs remain monospace.
+- Added a `fonts` folder beside `STBEditor.exe` for user-supplied `.ttf` and `.otf` files.
+  After restarting, choose the filename in Settings -> Interface font; custom styles and weights come
+  from the file itself. Settings can open the folder. No Windows or game fonts are bundled.
+
 ## 0.77.3
 
 - Clarified the separate record-heading font setting: it affects only EditorIDs and section titles in record
