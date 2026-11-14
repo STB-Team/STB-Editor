@@ -25,6 +25,8 @@ Roslyn (C# scripts). `Ui/UiFonts.cs` discovers supported Windows font faces and 
 `Ui/ImGuiLayer.cs` queues face changes until the next frame, caches loaded faces and switches `io.FontDefault`
 without rebuilding the ImGui context or invalidating font pointers held by open UI. Code/logs remain monospace.
 Preferences are `UiFontFamily`, `UiFontWeight` and `GameFontHeadings`; game fonts are never distributed.
+The separate heading face is used only by `RecordForm` for EditorIDs and section titles. Settings displays
+`GameHeaderFontSource`, renders a preview using the same `HeaderFont`, and disables the option if no face was found.
 
 ## Architecture
 

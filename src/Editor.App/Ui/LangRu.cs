@@ -20,8 +20,11 @@ internal static class LangRu
         ["Verdana"] = "Verdana",
         ["Calibri"] = "Calibri",
         ["Consolas"] = "Consolas",
-        ["Game-style headings"] = "Игровой шрифт заголовков",
-        ["Use the game's heading font when available. Turn off to use the selected interface font everywhere except code and logs."] = "Использовать шрифт заголовков из сборки, если он найден. Отключите, чтобы выбранный шрифт был везде, кроме кода и журнала.",
+        ["Separate font for record headings"] = "Отдельный шрифт заголовков записей",
+        ["Only record EditorIDs and section titles. Window tabs keep the interface font."] = "Только EditorID и названия разделов записи. Вкладки окон используют шрифт интерфейса.",
+        ["No separate record heading font found; headings use the interface font."] = "Отдельный шрифт заголовков записей не найден. Используется шрифт интерфейса.",
+        ["Available heading font: {0}"] = "Найден шрифт заголовков: {0}",
+        ["Record heading preview: ABC abc"] = "Пример заголовка записи: АБВ абв ABC abc",
         ["Font preview: ABC abc 0123456789"] = "Пример текста: АБВ абв ABC abc 0123456789",
         ["Font changes apply immediately. Code and logs keep their monospace font."] = "Шрифт меняется сразу. Код и журнал сохраняют моноширинный шрифт.",
         // ---- editor shell and viewport groups

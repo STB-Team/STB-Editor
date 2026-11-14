@@ -2,6 +2,15 @@
 
 Each `## <version>` section is the release description on GitHub (see the Release section of `docs/DEVELOPING.md`).
 
+## 0.77.3
+
+- Clarified the separate record-heading font setting: it affects only EditorIDs and section titles in record
+  forms, not window tabs. Settings shows the detected font filename and previews the actual heading font.
+  If no separate font is found, the checkbox is disabled with an explanation instead of a silent fallback.
+- Startup and font-switch logs identify the actual heading font source.
+- Fixed the missing-face fallback: an absent heading font now stores an empty nullable font, not a
+  null native pointer wrapped as an available face; `HeaderFont` consistently uses the selected interface face.
+
 ## 0.77.2
 
 - Settings → Interface: choose an installed Segoe UI, Arial, Tahoma, Verdana, Calibri or Consolas face

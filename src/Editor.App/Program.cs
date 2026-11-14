@@ -64,6 +64,7 @@ internal static class Program
         using var imgui = new ImGuiLayer(window.Handle, graphics, window.DpiScale, AppPaths.ImGuiIni,
             UiFonts.Find(FontGame(settings, options), face), settings.GameFontHeadings);
         Log.Info($"UI font: {imgui.FontSource}");
+        Log.Info($"Record heading font: {(settings.GameFontHeadings ? imgui.GameHeaderFontSource ?? imgui.FontSource : imgui.FontSource)}; available: {imgui.GameHeaderFontSource ?? "none"}");
 
         Log.Info($"STB Editor {typeof(Program).Assembly.GetName().Version} on {graphics.AdapterName}");
 

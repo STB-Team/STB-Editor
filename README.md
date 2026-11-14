@@ -13,7 +13,7 @@ Launching through MO2 is optional: the editor reads its profile directly and sav
 
 ## Current capabilities
 
-Current version: **0.77.2** (workspace shell, alias scripts, collision fixes and AI/MCP).
+Current version: **0.77.3** (workspace shell, alias scripts, collision fixes and AI/MCP).
 These are implemented capabilities, not a claim that all game data has been exhaustively tested or
 that every Creation Kit or xEdit operation has an equivalent.
 
@@ -111,7 +111,9 @@ Record names retain the installed game's language; assets and appearance depend 
   15 color themes, UI size (75–200%; Ctrl+= / Ctrl+- / Ctrl+0), and record header fields (hidden by default).
   **Interface font / Font weight** changes the installed Windows face immediately; available families are
   Segoe UI, Arial, Tahoma, Verdana, Calibri and Consolas. Only installed Regular/Semibold/Bold faces are offered.
-  Disable **Game-style headings** to use that face for headings too. Code/logs remain monospace; preferences persist.
+  **Separate font for record headings** affects only EditorIDs and section titles in record forms, not window tabs.
+  Its detected filename and a real heading preview are shown; it is disabled when no separate font is found.
+  Turn it off to use the interface face for record headings too. Code/logs remain monospace; preferences persist.
 - **Help → Keys and features** (F1) lists keys and workflows.
 - **View** controls open windows (Log and Load Order start closed), FPS limits (60 foreground,
   15 background by default), and resetting the layout.

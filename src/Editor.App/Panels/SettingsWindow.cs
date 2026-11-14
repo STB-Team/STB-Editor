@@ -73,10 +73,24 @@ internal sealed class SettingsWindow
                         app.SetInterfaceFont(face.Family, face.Weight, settings.GameFontHeadings);
                 ImGui.EndCombo();
             }
-            var gameHeadings = settings.GameFontHeadings;
-            if (ImGui.Checkbox(T("Game-style headings") + "###uigameheadings", ref gameHeadings))
+            var headingSource = app.Ui.GameHeaderFontSource;
+            var gameHeadings = settings.GameFontHeadings && headingSource is not null;
+            ImGui.BeginDisabled(headingSource is null);
+            if (ImGui.Checkbox(T("Separate font for record headings") + "###uigameheadings", ref gameHeadings))
                 app.SetInterfaceFont(settings.UiFontFamily, settings.UiFontWeight, gameHeadings);
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Use the game's heading font when available. Turn off to use the selected interface font everywhere except code and logs."));
+            ImGui.EndDisabled();
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                ImGui.SetTooltip(T("Only record EditorIDs and section titles. Window tabs keep the interface font."));
+            if (headingSource is null)
+                ImGui.TextWrapped(T("No separate record heading font found; headings use the interface font."));
+            else
+            {
+                ImGui.TextColored(Theme.TextDim, TF($"Available heading font: {Path.GetFileName(headingSource)}"));
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip(headingSource);
+            }
+            ImGui.PushFont(app.Ui.HeaderFont, 0);
+            ImGui.TextWrapped(T("Record heading preview: ABC abc"));
+            ImGui.PopFont();
             ImGui.TextWrapped(T("Font preview: ABC abc 0123456789"));
             ImGui.TextColored(Theme.TextDim, T("Font changes apply immediately. Code and logs keep their monospace font."));
 

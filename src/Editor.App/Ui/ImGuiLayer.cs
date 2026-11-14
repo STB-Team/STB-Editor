@@ -22,6 +22,7 @@ internal sealed unsafe class ImGuiLayer : IDisposable
     public ImFontPtr HeaderFont { get; private set; }
 
     public string FontSource { get; private set; }
+    public string? GameHeaderFontSource { get; }
     private readonly Dictionary<string, ImFontPtr> _bodyFonts = new(StringComparer.OrdinalIgnoreCase);
     private readonly float _fontSize;
     private readonly ImFontPtr _fallbackFont;
@@ -51,7 +52,10 @@ internal sealed unsafe class ImGuiLayer : IDisposable
         _fallbackFont = DefaultFont;
         if (fonts.Body is { } path) _bodyFonts.Add(path, DefaultFont);
         MonoFont = AddFont(io, ["consola.ttf", "cour.ttf"], MathF.Round(15f * dpiScale));
-        _gameHeaderFont = fonts.Header is { } header ? io.Fonts.AddFontFromFileTTF(header, MathF.Round(22f * dpiScale)) : null;
+        // A ternary ": null" selects ImFontPtr's implicit null conversion, not an empty nullable.
+        if (fonts.Header is { } header)
+            _gameHeaderFont = io.Fonts.AddFontFromFileTTF(header, MathF.Round(22f * dpiScale));
+        GameHeaderFontSource = fonts.Header;
         HeaderFont = gameHeadings ? _gameHeaderFont ?? DefaultFont : DefaultFont;
         io.FontDefault = DefaultFont;
         FontSource = fonts.Body ?? "ImGui default";
@@ -98,7 +102,8 @@ internal sealed unsafe class ImGuiLayer : IDisposable
         HeaderFont = pending.GameHeadings ? _gameHeaderFont ?? font : font;
         ImGui.GetIO().FontDefault = font;
         FontSource = pending.Body ?? "ImGui default";
-        StbEditor.App.Services.Log.Info($"UI font: {FontSource}; game headings {pending.GameHeadings}");
+        var headingSource = pending.GameHeadings ? GameHeaderFontSource : null;
+        StbEditor.App.Services.Log.Info($"UI font: {FontSource}; record headings: {headingSource ?? FontSource}");
     }
 
     /// <summary>Feeds a window message to ImGui. True when ImGui consumed it.</summary>
