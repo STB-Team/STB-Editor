@@ -2,6 +2,14 @@
 
 Each `## <version>` section is the release description on GitHub (see the Release section of `docs/DEVELOPING.md`).
 
+## 0.77.2
+
+- Settings → Interface: choose an installed Segoe UI, Arial, Tahoma, Verdana, Calibri or Consolas face
+  and its actual Regular / Semibold / Bold weight. Choices apply immediately and persist across restarts.
+  Game-style headings can be disabled independently; code and logs remain monospace.
+- Font switching happens between ImGui frames without recreating the context, closing records or clearing
+  edit history. Previously loaded faces are reused. Settings scrolls when the available height is limited.
+
 ## 0.77.1
 
 - Portable distribution: only `STBEditor.exe` and `README.txt` at the top level; managed libraries,

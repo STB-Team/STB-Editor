@@ -1,57 +1,7 @@
 using System.Numerics;
 using Hexa.NET.ImGui;
-using StbEditor.Data;
 
 namespace StbEditor.App.Ui;
-
-/// <summary>
-/// Segoe UI for long editing sessions and Cyrillic text; optional Sovngarde headings come from
-/// the player's own build. No fonts are shipped with the editor.
-/// </summary>
-internal sealed record UiFonts(string? Body, string? Header)
-{
-    private static readonly string[] HeaderNames = ["SovngardeBold.ttf", "Sovngarde.ttf", "SovngardeLight.ttf"];
-
-    public static UiFonts Find(GameInstall? game)
-    {
-        var systemFonts = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
-        var body = new[] { "segoeui.ttf", "arial.ttf" }
-            .Select(name => Path.Combine(systemFonts, name)).FirstOrDefault(File.Exists);
-        if (game is null) return new UiFonts(body, null);
-
-        var folders = new List<string>
-        {
-            Path.Combine(game.DataFolder, "SKSE", "Plugins", "fonts"),
-            Path.Combine(game.DataFolder, "Interface", "fonts"),
-        };
-
-        if (game.Mo2 is { } mo2)
-        {
-            // EnabledModFolders runs from low to high priority; the winner is searched first.
-            foreach (var mod in mo2.EnabledModFolders().Reverse())
-            {
-                folders.Add(Path.Combine(mod, "SKSE", "Plugins", "fonts"));
-                folders.Add(Path.Combine(mod, "Interface", "fonts"));
-            }
-        }
-
-        string? FindFirst(string[] names)
-        {
-            foreach (var folder in folders)
-            {
-                if (!Directory.Exists(folder)) continue;
-                foreach (var name in names)
-                {
-                    var path = Path.Combine(folder, name);
-                    if (File.Exists(path)) return path;
-                }
-            }
-            return null;
-        }
-
-        return new UiFonts(body, FindFirst(HeaderNames));
-    }
-}
 
 /// <summary>A colour theme: backgrounds, text, the accent and the tint that lights rows and buttons.</summary>
 internal sealed record Palette(string Name, bool Light, Vector4 Bg, Vector4 Bar, Vector4 Text, Vector4 TextDim, Vector4 Accent, Vector4 Tint,

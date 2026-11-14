@@ -15,15 +15,20 @@ internal sealed unsafe class ImGuiLayer : IDisposable
     private readonly ImGuiContextPtr _context;
     private readonly nint _iniPath;
 
-    public ImFontPtr DefaultFont { get; }
+    public ImFontPtr DefaultFont { get; private set; }
     public ImFontPtr MonoFont { get; }
 
     /// <summary>Display font for record titles (Sovngarde when the build has it).</summary>
-    public ImFontPtr HeaderFont { get; }
+    public ImFontPtr HeaderFont { get; private set; }
 
-    public string FontSource { get; }
+    public string FontSource { get; private set; }
+    private readonly Dictionary<string, ImFontPtr> _bodyFonts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly float _fontSize;
+    private readonly ImFontPtr _fallbackFont;
+    private readonly ImFontPtr? _gameHeaderFont;
+    private (string? Body, bool GameHeadings)? _pendingFont;
 
-    public ImGuiLayer(nint hwnd, GraphicsDevice graphics, float dpiScale, string iniFile, UiFonts fonts)
+    public ImGuiLayer(nint hwnd, GraphicsDevice graphics, float dpiScale, string iniFile, UiFonts fonts, bool gameHeadings)
     {
         _context = ImGui.CreateContext();
         ImGui.SetCurrentContext(_context);
@@ -40,12 +45,16 @@ internal sealed unsafe class ImGuiLayer : IDisposable
         _iniPath = Marshal.StringToCoTaskMemUTF8(iniFile);
         io.IniFilename = (byte*)_iniPath;
 
-        // System text stays readable in dense tables; game fonts are reserved for headings.
-        var fontSize = MathF.Round(16f * dpiScale);
-        DefaultFont = fonts.Body is { } body ? io.Fonts.AddFontFromFileTTF(body, fontSize) : AddFont(io, ["segoeui.ttf", "arial.ttf"], fontSize);
+        // Only load the selected body face. Further choices are cached, keeping existing ImFont pointers alive.
+        _fontSize = MathF.Round(16f * dpiScale);
+        DefaultFont = fonts.Body is { } body ? io.Fonts.AddFontFromFileTTF(body, _fontSize) : AddFont(io, ["segoeui.ttf", "arial.ttf"], _fontSize);
+        _fallbackFont = DefaultFont;
+        if (fonts.Body is { } path) _bodyFonts.Add(path, DefaultFont);
         MonoFont = AddFont(io, ["consola.ttf", "cour.ttf"], MathF.Round(15f * dpiScale));
-        HeaderFont = fonts.Header is { } header ? io.Fonts.AddFontFromFileTTF(header, MathF.Round(22f * dpiScale)) : DefaultFont;
-        FontSource = fonts.Body ?? "Segoe UI";
+        _gameHeaderFont = fonts.Header is { } header ? io.Fonts.AddFontFromFileTTF(header, MathF.Round(22f * dpiScale)) : null;
+        HeaderFont = gameHeadings ? _gameHeaderFont ?? DefaultFont : DefaultFont;
+        io.FontDefault = DefaultFont;
+        FontSource = fonts.Body ?? "ImGui default";
 
         Theme.Apply(dpiScale);
 
@@ -68,6 +77,28 @@ internal sealed unsafe class ImGuiLayer : IDisposable
         }
 
         return io.Fonts.AddFontDefault();
+    }
+
+    /// <summary>Apply outside the current ImGui frame; never recreate the context or discard open editors.</summary>
+    public void RequestFont(UiFontFace? face, bool gameHeadings) => _pendingFont = (face?.Path, gameHeadings);
+
+    private void ApplyPendingFont()
+    {
+        if (_pendingFont is not { } pending) return;
+        _pendingFont = null;
+        var font = _fallbackFont;
+        if (pending.Body is { } path && !_bodyFonts.TryGetValue(path, out font))
+        {
+            // The atlas is unlocked here. The official backend recreates its device objects in NewFrame.
+            ImGuiImplD3D11.InvalidateDeviceObjects();
+            font = ImGui.GetIO().Fonts.AddFontFromFileTTF(path, _fontSize);
+            _bodyFonts.Add(path, font);
+        }
+        DefaultFont = font;
+        HeaderFont = pending.GameHeadings ? _gameHeaderFont ?? font : font;
+        ImGui.GetIO().FontDefault = font;
+        FontSource = pending.Body ?? "ImGui default";
+        StbEditor.App.Services.Log.Info($"UI font: {FontSource}; game headings {pending.GameHeadings}");
     }
 
     /// <summary>Feeds a window message to ImGui. True when ImGui consumed it.</summary>
@@ -94,6 +125,7 @@ internal sealed unsafe class ImGuiLayer : IDisposable
 
     public void NewFrame()
     {
+        ApplyPendingFont();
         ImGuiImplD3D11.NewFrame();
         ImGuiImplWin32.NewFrame();
         if (TestMouse is { } mouse)

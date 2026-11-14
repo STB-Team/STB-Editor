@@ -55,7 +55,14 @@ internal static class Program
         var settings = Settings.Load();
         var window = new MainWindow("STB Editor", 1600, 960);
         using var graphics = new GraphicsDevice(window.Handle, window.ClientWidth, window.ClientHeight);
-        using var imgui = new ImGuiLayer(window.Handle, graphics, window.DpiScale, AppPaths.ImGuiIni, UiFonts.Find(FontGame(settings, options)));
+        var face = UiFonts.Resolve(settings.UiFontFamily, settings.UiFontWeight);
+        if (face is not null)
+        {
+            settings.UiFontFamily = face.Family;
+            settings.UiFontWeight = face.Weight;
+        }
+        using var imgui = new ImGuiLayer(window.Handle, graphics, window.DpiScale, AppPaths.ImGuiIni,
+            UiFonts.Find(FontGame(settings, options), face), settings.GameFontHeadings);
         Log.Info($"UI font: {imgui.FontSource}");
 
         Log.Info($"STB Editor {typeof(Program).Assembly.GetName().Version} on {graphics.AdapterName}");

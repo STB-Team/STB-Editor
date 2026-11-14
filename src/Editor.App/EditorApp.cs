@@ -4048,6 +4048,15 @@ internal sealed class EditorApp : IDisposable
         _settings.UiScale = Theme.UiScale;
     }
 
+    public void SetInterfaceFont(string family, string weight, bool gameHeadings)
+    {
+        var face = UiFonts.Resolve(family, weight);
+        _settings.UiFontFamily = face?.Family ?? family;
+        _settings.UiFontWeight = face?.Weight ?? weight;
+        _settings.GameFontHeadings = gameHeadings;
+        _imgui.RequestFont(face, gameHeadings);
+    }
+
     private void HandleShortcuts()
     {
         var keys = ImGui.GetIO();

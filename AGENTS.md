@@ -201,8 +201,10 @@ in the same settings directory (remove only when intentionally resetting layout)
 
 - Use `Theme.*` colors, not hard-coded colors. The style uses graphite surfaces/white-alpha
   highlights; `Ui/Studio.cs` owns edged controls, `Theme.Surfaces` structural surfaces,
-  `Studio.BeginWindow/BeginPopupModal` and `WindowChrome` padded close targets. Segoe UI is body
-  text/Cyrillic; optional Sovngarde headings come from the user's build, never ship game fonts.
+  `Studio.BeginWindow/BeginPopupModal` and `WindowChrome` padded close targets. `Ui/UiFonts.cs` offers
+  installed Windows faces (Segoe UI by default) and real weights. Queue font changes between ImGui
+  frames; keep the context and existing font pointers alive. Optional Sovngarde headings come from
+  the user's build and can be disabled; never ship game fonts. Code/log fonts remain monospace.
   Keep a plain-space digit separator. For font portability, prefer x, +, <-> to missing symbols.
 - Every visible string uses `T`, `TF` or `Title` (`Ui/Loc.cs`) and a Russian `Ui/LangRu.cs` entry.
   `python tools/loc.py missing` must exit 0 with no missing keys on stdout (`0 missing` on stderr); see

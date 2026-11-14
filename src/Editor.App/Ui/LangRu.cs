@@ -9,6 +9,21 @@ internal static class LangRu
 {
     public static readonly Dictionary<string, string> Strings = new()
     {
+        ["Interface font"] = "Шрифт интерфейса",
+        ["Font weight"] = "Жирность шрифта",
+        ["Regular"] = "Обычный",
+        ["Semibold"] = "Полужирный",
+        ["Bold"] = "Жирный",
+        ["Segoe UI"] = "Segoe UI",
+        ["Arial"] = "Arial",
+        ["Tahoma"] = "Tahoma",
+        ["Verdana"] = "Verdana",
+        ["Calibri"] = "Calibri",
+        ["Consolas"] = "Consolas",
+        ["Game-style headings"] = "Игровой шрифт заголовков",
+        ["Use the game's heading font when available. Turn off to use the selected interface font everywhere except code and logs."] = "Использовать шрифт заголовков из сборки, если он найден. Отключите, чтобы выбранный шрифт был везде, кроме кода и журнала.",
+        ["Font preview: ABC abc 0123456789"] = "Пример текста: АБВ абв ABC abc 0123456789",
+        ["Font changes apply immediately. Code and logs keep their monospace font."] = "Шрифт меняется сразу. Код и журнал сохраняют моноширинный шрифт.",
         // ---- editor shell and viewport groups
         ["Panel layout"] = "Раскладка",
         ["World layout"] = "Мир",

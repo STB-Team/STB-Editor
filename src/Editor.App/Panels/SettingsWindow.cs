@@ -17,8 +17,10 @@ internal sealed class SettingsWindow
     {
         if (!_open) return;
         var settings = app.Settings;
-        ImGui.SetNextWindowSize(app.Scaled(520, 0), ImGuiCond.Appearing);
-        if (Studio.BeginWindow(Title("Settings"), ref _open, ImGuiWindowFlags.NoDocking | ImGuiWindowFlags.AlwaysAutoResize))
+        var work = ImGui.GetMainViewport().WorkSize;
+        var size = app.Scaled(600, 860);
+        ImGui.SetNextWindowSize(new System.Numerics.Vector2(Math.Min(size.X, work.X), Math.Min(size.Y, work.Y * 0.9f)), ImGuiCond.Appearing);
+        if (Studio.BeginWindow(Title("Settings"), ref _open, ImGuiWindowFlags.NoDocking))
         {
             ImGui.SeparatorText(T("Camera"));
             var zoom = settings.WheelZoomSpeed;
@@ -53,6 +55,30 @@ internal sealed class SettingsWindow
             ImGui.SetNextItemWidth(ImGui.GetFontSize() * 12);
             var language = Loc.Russian ? 1 : 0;
             if (ImGui.Combo("Language / Язык", ref language, ["English", "Русский"], 2)) app.SetLanguage(language == 1 ? "ru" : "en");
+
+            var currentFont = UiFonts.Resolve(settings.UiFontFamily, settings.UiFontWeight);
+            ImGui.SetNextItemWidth(ImGui.GetFontSize() * 16);
+            if (ImGui.BeginCombo(T("Interface font") + "###uifontfamily", currentFont is null ? T("Default") : T(currentFont.Family)))
+            {
+                foreach (var family in UiFonts.Families)
+                    if (ImGui.Selectable(T(family), family == currentFont?.Family))
+                        app.SetInterfaceFont(family, settings.UiFontWeight, settings.GameFontHeadings);
+                ImGui.EndCombo();
+            }
+            ImGui.SetNextItemWidth(ImGui.GetFontSize() * 16);
+            if (ImGui.BeginCombo(T("Font weight") + "###uifontweight", T(currentFont?.Weight ?? "Regular")))
+            {
+                foreach (var face in UiFonts.Faces)
+                    if (face.Family == currentFont?.Family && ImGui.Selectable(T(face.Weight), face.Weight == currentFont?.Weight))
+                        app.SetInterfaceFont(face.Family, face.Weight, settings.GameFontHeadings);
+                ImGui.EndCombo();
+            }
+            var gameHeadings = settings.GameFontHeadings;
+            if (ImGui.Checkbox(T("Game-style headings") + "###uigameheadings", ref gameHeadings))
+                app.SetInterfaceFont(settings.UiFontFamily, settings.UiFontWeight, gameHeadings);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(T("Use the game's heading font when available. Turn off to use the selected interface font everywhere except code and logs."));
+            ImGui.TextWrapped(T("Font preview: ABC abc 0123456789"));
+            ImGui.TextColored(Theme.TextDim, T("Font changes apply immediately. Code and logs keep their monospace font."));
 
             // Interface size: applied when the slider is let go (live resizing would move the slider under the mouse).
             ImGui.SetNextItemWidth(ImGui.GetFontSize() * 12);

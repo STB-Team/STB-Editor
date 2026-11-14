@@ -21,8 +21,10 @@ Repository operating guidance: [AGENTS.md](../AGENTS.md).
 
 NuGet dependencies: Mutagen.Bethesda.Skyrim (plugins), Hexa.NET.ImGui + Backends + ImGuizmo (UI),
 Vortice.Direct3D11 / D3DCompiler (rendering), BepuPhysics (dropping/hulls), DotRecast (navmesh),
-Roslyn (C# scripts). The primary Segoe UI font comes from Windows; game heading fonts are located in
-the user's installation (`Ui/Theme.cs`). Game fonts are not distributed.
+Roslyn (C# scripts). `Ui/UiFonts.cs` discovers supported Windows font faces and game heading fonts.
+`Ui/ImGuiLayer.cs` queues face changes until the next frame, caches loaded faces and switches `io.FontDefault`
+without rebuilding the ImGui context or invalidating font pointers held by open UI. Code/logs remain monospace.
+Preferences are `UiFontFamily`, `UiFontWeight` and `GameFontHeadings`; game fonts are never distributed.
 
 ## Architecture
 
